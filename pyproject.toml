@@ -1,0 +1,32 @@
+[project]
+name = "sleepy-sentinel"
+version = "0.1.0"
+description = "Detect drowsiness before it becomes a problem"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+  "mediapipe",
+  "numpy",
+  "opencv-python",
+]
+
+[dependency-groups]
+dev = [
+  "ruff>=0.15.11",
+]
+
+[project.scripts]
+extract_features = "src.data-prep.extract_features:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/data-prep"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
