@@ -28,28 +28,20 @@ Output (tiny text files, one row per frame)::
         01/  0.csv   5.csv   10.csv
         ...
 
-Model file
-----------
-Download the FaceLandmarker bundle once (it includes the blendshape +
-transformation-matrix heads)::
-
-    curl -L -o face_landmarker.task \\
-      https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
-
 Dependencies
 ------------
-    pip install mediapipe opencv-python numpy
+    uv add mediapipe opencv-python numpy
 
 Examples
 --------
     # single video (good for the "process then delete" loop)
-    python extract_features.py --video data/01/0.mov --subject 01 --label 0 --out features
+    uv run extract_features --video data/01/0.mov --subject 01 --label 0 --out features
 
     # whole tree, resume-safe, keep going past per-video errors
-    python extract_features.py --root data --out features
+    uv run extract_features --root data --out features
 
     # reclaim space as you go (deletes each source AFTER its CSV is written)
-    python extract_features.py --root data --out features --delete-source
+    uv run extract_features --root data --out features --delete-source
 """
 
 import argparse
@@ -58,10 +50,11 @@ import math
 import os
 import sys
 import traceback
+import urllib.request
 
 import cv2
-import numpy as np
 import mediapipe as mp
+import numpy as np
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision as mp_vision
 
@@ -71,6 +64,8 @@ from mediapipe.tasks.python import vision as mp_vision
 
 # filename stem -> ordinal class label
 LABEL_MAP = {"0": 0, "5": 1, "10": 2}
+
+MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
 
 # Conventional MediaPipe FaceMesh 6-point eye landmark indices for EAR.
 # Order per eye: [h_corner_a, v_top_a, v_top_b, h_corner_b, v_bot_b, v_bot_a].
@@ -142,6 +137,22 @@ def blendshape_dict(face_blendshapes):
     if not face_blendshapes:
         return {}
     return {c.category_name: c.score for c in face_blendshapes[0]}
+
+
+def download_model(model_path, url=MODEL_URL):
+    """Download the FaceLandmarker task bundle atomically."""
+    target = os.path.abspath(model_path)
+    tmp_path = f"{target}.download"
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+
+    print(f"[dl]   {url} -> {target}")
+    try:
+        urllib.request.urlretrieve(url, tmp_path)
+        os.replace(tmp_path, target)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise
 
 
 # --------------------------------------------------------------------------- #
@@ -273,7 +284,9 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--model", default="face_landmarker.task",
                     help="path to the FaceLandmarker .task bundle")
-    ap.add_argument("--out", required=True, help="output root for the CSVs")
+    ap.add_argument("--model-url", default=MODEL_URL,
+                    help="URL to download the FaceLandmarker .task bundle from")
+    ap.add_argument("--out", help="output root for the CSVs")
     ap.add_argument("--frame-stride", type=int, default=1,
                     help="process every Nth frame (1 = all; keep 1 for blink fidelity)")
     ap.add_argument("--overwrite", action="store_true",
@@ -289,9 +302,21 @@ def main():
     ap.add_argument("--label", help="filename stem (0/5/10) for --video mode")
     args = ap.parse_args()
 
+    if os.path.exists(args.model):
+        print(f"[skip] {args.model} exists")
+    else:
+        download_model(args.model, args.model_url)
+    if not args.video and not args.root:
+        return
+
+    if not args.video and not args.root:
+        sys.exit("provide either --root or --video")
+    if not args.out:
+        sys.exit("provide --out for extraction output")
     if not os.path.exists(args.model):
         sys.exit(f"model not found: {args.model}\n"
-                 "download it (see the docstring at the top of this file).")
+                 f"download it with:\n  curl -L \"{args.model_url}\" -o {args.model}\n"
+                 "or rerun with --download-model.")
 
     landmarker = make_landmarker(args.model)
     try:
@@ -308,8 +333,6 @@ def main():
                     if not args.keep_going:
                         raise
                     print(f"[err]  {vpath}\n{traceback.format_exc()}")
-        else:
-            sys.exit("provide either --root or --video")
     finally:
         landmarker.close()
 

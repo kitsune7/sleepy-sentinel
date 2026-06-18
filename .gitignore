@@ -3,3 +3,5 @@ UTA-RLDD Dataset/
 *.pyc
 *.task
 __pycache__/
+*.mov
+*.mp4
