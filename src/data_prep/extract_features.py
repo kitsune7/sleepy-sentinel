@@ -9,20 +9,20 @@ processed one at a time, so a multi-hundred-MB video never lives in RAM, and you
 can point this at a single file (process, then delete the source) so the full
 ~111 GB dataset never needs to sit on disk at once.
 
-Dataset layout expected (one folder per subject, three videos per folder)::
+Dataset layout expected (one folder per subject, three videos per folder):
 
     <root>/
         01/  0.mov   5.mov   10.mov
         02/  0.mov   5.mov   10.mov
         ...
 
-Filename -> ordinal label::
+Filename -> ordinal label:
 
     0.mov  -> 0  (alert)
     5.mov  -> 1  (low-vigilant)
     10.mov -> 2  (drowsy)
 
-Output (tiny text files, one row per frame)::
+Output (tiny text files, one row per frame):
 
     <out>/
         01/  0.csv   5.csv   10.csv
@@ -49,6 +49,7 @@ import csv
 import math
 import os
 import sys
+import time
 import traceback
 import urllib.request
 
@@ -155,6 +156,42 @@ def download_model(model_path, url=MODEL_URL):
         raise
 
 
+def format_duration(seconds):
+    seconds = max(0, int(seconds))
+    mins, secs = divmod(seconds, 60)
+    hours, mins = divmod(mins, 60)
+    if hours:
+        return f"{hours:d}:{mins:02d}:{secs:02d}"
+    return f"{mins:d}:{secs:02d}"
+
+
+def render_progress(label, current, total, started_at, force=False):
+    now = time.monotonic()
+    if not force and now - render_progress.last_update < 0.25:
+        return
+    render_progress.last_update = now
+
+    elapsed = max(now - started_at, 1e-6)
+    fps = current / elapsed
+    if total > 0:
+        pct = min(current / total, 1.0)
+        width = 30
+        filled = int(width * pct)
+        bar = "#" * filled + "-" * (width - filled)
+        remaining = max(total - current, 0) / fps if fps > 0 else 0
+        line = (
+            f"\r[prog] {label} [{bar}] {pct * 100:5.1f}% "
+            f"{current}/{total} frames, {fps:5.1f} fps, eta {format_duration(remaining)}"
+        )
+    else:
+        line = f"\r[prog] {label} {current} frames, {fps:5.1f} fps"
+    sys.stderr.write(line)
+    sys.stderr.flush()
+
+
+render_progress.last_update = 0.0
+
+
 # --------------------------------------------------------------------------- #
 # Core: one video -> one CSV (streaming, frame by frame)
 # --------------------------------------------------------------------------- #
@@ -170,7 +207,7 @@ def make_landmarker(model_path):
     return mp_vision.FaceLandmarker.create_from_options(options)
 
 
-def process_video(video_path, out_csv, landmarker, frame_stride=1):
+def process_video(video_path, out_csv, landmarker, frame_stride=1, show_progress=True):
     """Read `video_path` frame by frame, write per-frame features to `out_csv`.
 
     Returns (n_frames_written, n_faces_detected). RAM stays bounded by a single
@@ -181,6 +218,10 @@ def process_video(video_path, out_csv, landmarker, frame_stride=1):
         raise IOError(f"could not open {video_path}")
 
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    progress_label = os.path.join(os.path.basename(os.path.dirname(video_path)), os.path.basename(video_path))
+    progress_started_at = time.monotonic()
+    render_progress.last_update = 0.0
     rows = []
     frame_idx = -1
     n_faces = 0
@@ -190,6 +231,8 @@ def process_video(video_path, out_csv, landmarker, frame_stride=1):
         if not ok:
             break
         frame_idx += 1
+        if show_progress:
+            render_progress(progress_label, frame_idx + 1, total_frames, progress_started_at)
         if frame_stride > 1 and (frame_idx % frame_stride):
             continue
 
@@ -236,6 +279,9 @@ def process_video(video_path, out_csv, landmarker, frame_stride=1):
             ])
 
     cap.release()
+    if show_progress:
+        render_progress(progress_label, frame_idx + 1, total_frames, progress_started_at, force=True)
+        sys.stderr.write("\n")
 
     os.makedirs(os.path.dirname(out_csv), exist_ok=True)
     with open(out_csv, "w", newline="") as f:
@@ -271,7 +317,7 @@ def run_one(video_path, out_csv, landmarker, args):
     if os.path.exists(out_csv) and not args.overwrite:
         print(f"[skip] {out_csv} exists")
         return
-    n, faces = process_video(video_path, out_csv, landmarker, args.frame_stride)
+    n, faces = process_video(video_path, out_csv, landmarker, args.frame_stride, not args.no_progress)
     pct = (100.0 * faces / n) if n else 0.0
     print(f"[ok]   {video_path} -> {out_csv}  ({n} frames, {pct:.1f}% with a face)")
     if args.delete_source:
@@ -293,6 +339,8 @@ def main():
                     help="re-extract even if the output CSV already exists")
     ap.add_argument("--delete-source", action="store_true",
                     help="delete each source video AFTER its CSV is written")
+    ap.add_argument("--no-progress", action="store_true",
+                    help="disable per-video terminal progress bars")
     ap.add_argument("--keep-going", action="store_true", default=True,
                     help="continue past per-video errors (default on)")
     # one of:
@@ -318,6 +366,7 @@ def main():
                  f"download it with:\n  curl -L \"{args.model_url}\" -o {args.model}\n"
                  "or rerun with --download-model.")
 
+    print("Starting feature extraction...")
     landmarker = make_landmarker(args.model)
     try:
         if args.video:
@@ -335,6 +384,7 @@ def main():
                     print(f"[err]  {vpath}\n{traceback.format_exc()}")
     finally:
         landmarker.close()
+        print("Feature extraction completed successfully.")
 
 
 if __name__ == "__main__":
