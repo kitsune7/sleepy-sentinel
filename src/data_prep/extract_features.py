@@ -9,18 +9,19 @@ processed one at a time, so a multi-hundred-MB video never lives in RAM, and you
 can point this at a single file (process, then delete the source) so the full
 ~111 GB dataset never needs to sit on disk at once.
 
-Dataset layout expected (one folder per subject, three videos per folder):
+Dataset layout expected (one folder per subject, three videos per folder).
+Video extensions may vary; files are matched by stem:
 
     <root>/
-        01/  0.mov   5.mov   10.mov
-        02/  0.mov   5.mov   10.mov
+        01/  0.mov   5.MOV   10.mp4
+        02/  0.mp4   5.mov   10.MOV
         ...
 
 Filename -> ordinal label:
 
-    0.mov  -> 0  (alert)
-    5.mov  -> 1  (low-vigilant)
-    10.mov -> 2  (drowsy)
+    0.*  -> 0  (alert)
+    5.*  -> 1  (low-vigilant)
+    10.* -> 2  (drowsy)
 
 Output (tiny text files, one row per frame):
 
@@ -297,15 +298,18 @@ def process_video(video_path, out_csv, landmarker, frame_stride=1, show_progress
 # --------------------------------------------------------------------------- #
 
 def iter_videos(root):
-    """Yield (subject_id, label, video_path) for every N/{0,5,10}.mov under root."""
+    """Yield (subject_id, label, video_path) for every N/{0,5,10}.* under root."""
     for subject in sorted(os.listdir(root)):
         sub_dir = os.path.join(root, subject)
         if not os.path.isdir(sub_dir):
             continue
         for fname in sorted(os.listdir(sub_dir)):
-            stem, ext = os.path.splitext(fname)
-            if ext.lower() == ".mov" and stem in LABEL_MAP:
-                yield subject, LABEL_MAP[stem], os.path.join(sub_dir, fname)
+            video_path = os.path.join(sub_dir, fname)
+            if not os.path.isfile(video_path):
+                continue
+            stem, _ext = os.path.splitext(fname)
+            if stem in LABEL_MAP:
+                yield subject, LABEL_MAP[stem], video_path
 
 
 def out_path_for(out_root, subject, video_path):
