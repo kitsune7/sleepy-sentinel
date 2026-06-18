@@ -317,11 +317,15 @@ def out_path_for(out_root, subject, video_path):
     return os.path.join(out_root, subject, f"{stem}.csv")
 
 
-def run_one(video_path, out_csv, landmarker, args):
+def run_one(video_path, out_csv, args):
     if os.path.exists(out_csv) and not args.overwrite:
         print(f"[skip] {out_csv} exists")
         return
-    n, faces = process_video(video_path, out_csv, landmarker, args.frame_stride, not args.no_progress)
+    landmarker = make_landmarker(args.model)
+    try:
+        n, faces = process_video(video_path, out_csv, landmarker, args.frame_stride, not args.no_progress)
+    finally:
+        landmarker.close()
     pct = (100.0 * faces / n) if n else 0.0
     print(f"[ok]   {video_path} -> {out_csv}  ({n} frames, {pct:.1f}% with a face)")
     if args.delete_source:
@@ -371,24 +375,20 @@ def main():
                  "or rerun with --download-model.")
 
     print("Starting feature extraction...")
-    landmarker = make_landmarker(args.model)
-    try:
-        if args.video:
-            subject = args.subject or "unknown"
-            out_csv = out_path_for(args.out, subject, args.video)
-            run_one(args.video, out_csv, landmarker, args)
-        elif args.root:
-            for subject, _label, vpath in iter_videos(args.root):
-                out_csv = out_path_for(args.out, subject, vpath)
-                try:
-                    run_one(vpath, out_csv, landmarker, args)
-                except Exception:
-                    if not args.keep_going:
-                        raise
-                    print(f"[err]  {vpath}\n{traceback.format_exc()}")
-    finally:
-        landmarker.close()
-        print("Feature extraction completed successfully.")
+    if args.video:
+        subject = args.subject or "unknown"
+        out_csv = out_path_for(args.out, subject, args.video)
+        run_one(args.video, out_csv, args)
+    elif args.root:
+        for subject, _label, vpath in iter_videos(args.root):
+            out_csv = out_path_for(args.out, subject, vpath)
+            try:
+                run_one(vpath, out_csv, args)
+            except Exception:
+                if not args.keep_going:
+                    raise
+                print(f"[err]  {vpath}\n{traceback.format_exc()}")
+    print("Feature extraction completed successfully.")
 
 
 if __name__ == "__main__":
