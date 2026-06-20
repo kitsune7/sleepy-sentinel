@@ -70,7 +70,14 @@ def clean_frame_features(frame_df: pd.DataFrame, fps: float) -> pd.DataFrame:
 
 def iter_window_bounds(frame_df: pd.DataFrame, window_sec: float, stride_sec: float) -> list[tuple[int, int]]:
     """Return start/end frame indexes for each sliding window."""
-    raise NotImplementedError
+    fps = 1000 / frame_df["t_ms"].diff().dropna().median()
+    window_frames = round(window_sec * fps)
+    stride_frames = round(stride_sec * fps)
+
+    return [
+        (start, start + window_frames)
+        for start in range(0, len(frame_df) - window_frames + 1, stride_frames)
+    ]
 
 
 def is_valid_window(window_df: pd.DataFrame, max_missing_face_fraction: float) -> bool:
