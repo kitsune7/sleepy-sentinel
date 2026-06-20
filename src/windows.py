@@ -82,7 +82,8 @@ def iter_window_bounds(frame_df: pd.DataFrame, window_sec: float, stride_sec: fl
 
 def is_valid_window(window_df: pd.DataFrame, max_missing_face_fraction: float) -> bool:
     """Decide whether a window has enough detected-face frames to keep."""
-    raise NotImplementedError
+    missing_face_fraction = len(window_df[window_df["face"] == 0]) / len(window_df)
+    return missing_face_fraction <= max_missing_face_fraction
 
 
 def summarize_window(window_df: pd.DataFrame, fps: float) -> dict[str, Any]:
