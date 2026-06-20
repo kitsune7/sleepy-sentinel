@@ -193,6 +193,17 @@ def render_progress(label, current, total, started_at, force=False):
 render_progress.last_update = 0.0
 
 
+def monotonic_timestamp_ms(raw_t_ms, frame_idx, fps, previous_t_ms):
+    """Return a timestamp MediaPipe VIDEO mode will accept for this frame."""
+    if not raw_t_ms or not math.isfinite(raw_t_ms) or raw_t_ms <= 0:
+        raw_t_ms = (frame_idx / fps) * 1000.0
+
+    t_ms = int(round(raw_t_ms))
+    if previous_t_ms is not None and t_ms <= previous_t_ms:
+        return previous_t_ms + 1
+    return t_ms
+
+
 # --------------------------------------------------------------------------- #
 # Core: one video -> one CSV (streaming, frame by frame)
 # --------------------------------------------------------------------------- #
@@ -218,7 +229,9 @@ def process_video(video_path, out_csv, landmarker, frame_stride=1, show_progress
     if not cap.isOpened():
         raise IOError(f"could not open {video_path}")
 
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if not fps or not math.isfinite(fps) or fps <= 0:
+        fps = 30.0
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     progress_label = os.path.join(os.path.basename(os.path.dirname(video_path)), os.path.basename(video_path))
     progress_started_at = time.monotonic()
@@ -226,6 +239,7 @@ def process_video(video_path, out_csv, landmarker, frame_stride=1, show_progress
     rows = []
     frame_idx = -1
     n_faces = 0
+    previous_t_ms = None
 
     while True:
         ok, frame = cap.read()
@@ -241,12 +255,11 @@ def process_video(video_path, out_csv, landmarker, frame_stride=1, show_progress
         bright, warmth = frame_photometrics(frame)
 
         # MediaPipe expects RGB; timestamps must increase monotonically.
-        t_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
-        if not t_ms or t_ms <= 0:
-            t_ms = (frame_idx / fps) * 1000.0
+        t_ms = monotonic_timestamp_ms(cap.get(cv2.CAP_PROP_POS_MSEC), frame_idx, fps, previous_t_ms)
+        previous_t_ms = t_ms
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-        result = landmarker.detect_for_video(mp_image, int(t_ms))
+        result = landmarker.detect_for_video(mp_image, t_ms)
 
         if result.face_landmarks:
             n_faces += 1
