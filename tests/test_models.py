@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import torch
 import pytest
+import torch
 
-import models
+from training import models
 
 
 def test_build_cross_entropy_mlp_returns_torch_module_with_three_logits() -> None:

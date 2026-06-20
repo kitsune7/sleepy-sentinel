@@ -5,7 +5,7 @@ import json
 import pandas as pd
 import pytest
 
-import splits
+from training import splits
 
 
 def make_windows_df() -> pd.DataFrame:

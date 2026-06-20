@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-import windows
+from data_prep import windows
 
 
 def make_frame_df() -> pd.DataFrame:

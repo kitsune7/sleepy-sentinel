@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import dataset
+from training import dataset
 
 
 def make_windows_df() -> pd.DataFrame:

@@ -267,15 +267,19 @@ its confusion-matrix errors should concentrate on the diagonal/off-by-one cells.
 
 ```
 alertness/
-  extract_features.py          # Stage 1 (provided)
+  src/
+    data_prep/
+      extract_features.py      # Stage 1 (provided)
+      windows.py               # Stage 2: per-frame CSV -> windows.parquet
+    training/
+      dataset.py               # Stage 3: encode + per-subject norm + scaler
+      splits.py                # Stage 4: GroupKFold / LOSO / fixed holdout
+      models.py                # Stage 5: MLP+CORN, MLP+CE, optional LightGBM
+      train.py                 # Stage 5-6: CV loop, early stopping, aggregation
+      baselines.py             # Stage 8: majority, luminance-only, PERCLOS-only
+    evaluation/
+      metrics.py               # Stage 7: QWK, MAE, confusion matrix
   face_landmarker.task         # downloaded model bundle
-  windows.py                   # Stage 2: per-frame CSV -> windows.parquet
-  dataset.py                   # Stage 3: encode + per-subject norm + scaler
-  splits.py                    # Stage 4: GroupKFold / LOSO / fixed holdout
-  models.py                    # Stage 5: MLP+CORN, MLP+CE, optional LightGBM
-  train.py                     # Stage 5-6: CV loop, early stopping, aggregation
-  metrics.py                   # Stage 7: QWK, MAE, confusion matrix
-  baselines.py                 # Stage 8: majority, luminance-only, PERCLOS-only
   config.yaml                  # all params (window sizes, lr, seeds, fold count)
   data/                        # raw videos (can live on external storage)
   features/                    # per-frame CSVs from Stage 1
@@ -283,13 +287,13 @@ alertness/
 
 ## 13. Build order
 
-1. Run `extract_features.py` over the dataset → `features/`.
-2. `windows.py` → `windows.parquet`.
-3. `dataset.py` (per-subject norm + train-only scaler) and `splits.py`.
+1. Run `data_prep.extract_features` over the dataset → `features/`.
+2. `data_prep.windows` → `windows.parquet`.
+3. `training.dataset` (per-subject norm + train-only scaler) and `training.splits`.
 4. `baselines.py` — establish the floors first.
-5. `models.py` + `train.py` — CORN model and the cross-entropy baseline, under
+5. `training.models` + `training.train` — CORN model and the cross-entropy baseline, under
    subject-wise CV, aggregating windows → video.
-6. `metrics.py` — report mean ± std across folds vs. the baselines.
+6. `evaluation.metrics` — report mean ± std across folds vs. the baselines.
 
 ## 14. Dependencies
 

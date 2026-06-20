@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 from sklearn.metrics import cohen_kappa_score
 
-import metrics
+from evaluation import metrics
 
 
 def test_quadratic_weighted_kappa_matches_sklearn_for_ordinal_labels() -> None:

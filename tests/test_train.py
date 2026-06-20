@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 import torch
 
-import train
+from training import train
 
 
 def test_set_random_seeds_makes_python_numpy_and_torch_reproducible() -> None:
