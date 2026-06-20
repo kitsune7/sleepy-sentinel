@@ -19,6 +19,12 @@ from typing import Any
 
 import pandas as pd
 
+WINDOW_SEC = 15.0
+STRIDE_SEC = 7.5
+MAX_MISSING_FACE_FRACTION = 0.30
+LABEL_BY_VIDEO_STEM = {"0": 0, "5": 1, "10": 2}
+HEAD_DOWN_PITCH_DEG = 15.0
+
 
 def load_frame_csv(csv_path: str | Path) -> pd.DataFrame:
     """Read one per-video feature CSV."""
@@ -88,24 +94,114 @@ def is_valid_window(window_df: pd.DataFrame, max_missing_face_fraction: float) -
 
 def summarize_window(window_df: pd.DataFrame, fps: float) -> dict[str, Any]:
     """Compute blink, eye-closure, yawn, head-pose, and quality features."""
-    raise NotImplementedError
+    eye_blink = window_df[["eye_blink_l", "eye_blink_r"]].mean(axis=1)
+    eye_closed = eye_blink > 0.5
+
+    blink_durations = _run_durations_seconds(eye_closed, fps)
+    window_minutes = len(window_df) / fps / 60
+
+    yawn_frames = window_df["jaw_open"] > 0.5
+    yawn_count = sum(duration >= 0.5 for duration in _run_durations_seconds(yawn_frames, fps))
+
+    return {
+        "perclos": float(eye_closed.mean()),
+        "blink_rate": len(blink_durations) / window_minutes if window_minutes else 0.0,
+        "blink_dur_mean": _mean_or_zero(blink_durations),
+        "blink_dur_max": max(blink_durations, default=0.0),
+        "eye_blink_mean": float(eye_blink.mean()),
+        "eye_blink_std": float(eye_blink.std()),
+        "ear_mean": float(window_df["ear"].mean()),
+        "ear_std": float(window_df["ear"].std()),
+        "ear_min": float(window_df["ear"].min()),
+        "jaw_open_mean": float(window_df["jaw_open"].mean()),
+        "jaw_open_max": float(window_df["jaw_open"].max()),
+        "yawn_count": yawn_count,
+        "pitch_mean": float(window_df["pitch"].mean()),
+        "pitch_std": float(window_df["pitch"].std()),
+        "pitch_range": float(window_df["pitch"].max() - window_df["pitch"].min()),
+        "frac_head_down": float((window_df["pitch"] > HEAD_DOWN_PITCH_DEG).mean()),
+        "yaw_std": float(window_df["yaw"].std()),
+        "roll_std": float(window_df["roll"].std()),
+        "frac_face_missing": float((window_df["face"] == 0).mean()),
+    }
 
 
 def build_windows_table(features_root: str | Path) -> pd.DataFrame:
     """Build the full window-level table from all subject/video CSVs."""
-    raise NotImplementedError
+    rows: list[dict[str, Any]] = []
+    features_root = Path(features_root)
+
+    for csv_path in sorted(features_root.glob("*/*.csv")):
+        subject_id = csv_path.parent.name
+        video_stem = csv_path.stem
+        label = LABEL_BY_VIDEO_STEM.get(video_stem, int(video_stem))
+        frame_df = load_frame_csv(csv_path)
+        fps = 1000 / frame_df["t_ms"].diff().dropna().median()
+        cleaned = clean_frame_features(frame_df, fps=fps)
+        bounds = iter_window_bounds(cleaned, window_sec=WINDOW_SEC, stride_sec=STRIDE_SEC)
+
+        if not bounds and not cleaned.empty:
+            bounds = [(0, len(cleaned))]
+
+        window_idx = 0
+        for start, end in bounds:
+            window_df = cleaned.iloc[start:end]
+            if not is_valid_window(window_df, max_missing_face_fraction=MAX_MISSING_FACE_FRACTION):
+                continue
+
+            rows.append(
+                {
+                    "subject_id": subject_id,
+                    "video_id": f"{subject_id}/{video_stem}",
+                    "label": label,
+                    "window_idx": window_idx,
+                    **summarize_window(window_df, fps=fps),
+                }
+            )
+            window_idx += 1
+
+    return pd.DataFrame(rows)
 
 
 def write_windows_table(windows_df: pd.DataFrame, output_path: str | Path) -> None:
     """Persist the window-level table, likely as Parquet."""
-    raise NotImplementedError
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if output_path.suffix == ".csv":
+        windows_df.to_csv(output_path, index=False)
+    else:
+        windows_df.to_parquet(output_path, index=False)
 
 
 def main() -> None:
     """Command-line entry point for generating the windows table."""
-    raise NotImplementedError
+    import argparse
 
-# Intermediate testing code:
-if __name__ == "__main__":
-    df = load_frame_csv("data/01/0.csv")
-    print(df.head())
+    parser = argparse.ArgumentParser(description="Build the alertness window table from per-frame CSVs.")
+    parser.add_argument("features_root", type=Path)
+    parser.add_argument("output_path", type=Path)
+    args = parser.parse_args()
+
+    write_windows_table(build_windows_table(args.features_root), args.output_path)
+
+
+def _run_durations_seconds(mask: pd.Series, fps: float) -> list[float]:
+    durations: list[float] = []
+    run_length = 0
+
+    for value in mask.fillna(False).astype(bool):
+        if value:
+            run_length += 1
+        elif run_length:
+            durations.append(run_length / fps)
+            run_length = 0
+
+    if run_length:
+        durations.append(run_length / fps)
+
+    return durations
+
+
+def _mean_or_zero(values: list[float]) -> float:
+    return sum(values) / len(values) if values else 0.0

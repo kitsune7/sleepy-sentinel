@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import torch
+
 
 def build_cross_entropy_mlp(
     input_dim: int,
@@ -22,7 +24,7 @@ def build_cross_entropy_mlp(
     num_classes: int,
 ) -> Any:
     """Create the main 3-class MLP baseline."""
-    raise NotImplementedError
+    return _build_mlp(input_dim=input_dim, hidden_dims=hidden_dims, dropout=dropout, output_dim=num_classes)
 
 
 def build_ordinal_mlp(
@@ -31,20 +33,37 @@ def build_ordinal_mlp(
     dropout: float,
     num_classes: int,
 ) -> Any:
-    """Create an ordinal model variant if you choose to implement CORN later."""
-    raise NotImplementedError
+    """Create an ordinal model variant."""
+    return _build_mlp(input_dim=input_dim, hidden_dims=hidden_dims, dropout=dropout, output_dim=num_classes - 1)
 
 
 def predict_logits(model: Any, batch: Any) -> Any:
     """Run the model and return raw logits."""
-    raise NotImplementedError
+    model.eval()
+    with torch.no_grad():
+        return model(batch)
 
 
 def predict_probabilities(model: Any, batch: Any) -> Any:
     """Convert model outputs into class probabilities or ordinal probabilities."""
-    raise NotImplementedError
+    return torch.softmax(predict_logits(model, batch), dim=1)
 
 
 def predict_labels(model: Any, batch: Any) -> Any:
     """Convert model outputs into predicted class labels."""
-    raise NotImplementedError
+    return predict_probabilities(model, batch).argmax(dim=1)
+
+
+def _build_mlp(input_dim: int, hidden_dims: tuple[int, ...], dropout: float, output_dim: int) -> torch.nn.Module:
+    layers: list[torch.nn.Module] = []
+    current_dim = input_dim
+
+    for hidden_dim in hidden_dims:
+        layers.append(torch.nn.Linear(current_dim, hidden_dim))
+        layers.append(torch.nn.ReLU())
+        if dropout > 0:
+            layers.append(torch.nn.Dropout(dropout))
+        current_dim = hidden_dim
+
+    layers.append(torch.nn.Linear(current_dim, output_dim))
+    return torch.nn.Sequential(*layers)
