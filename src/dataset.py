@@ -77,8 +77,8 @@ def make_dataloaders(fold_datasets: dict[str, Any], batch_size: int) -> dict[str
 
     for split_name in ["train", "validation", "test"]:
         split = fold_datasets[split_name]
-        x = torch.as_tensor(split["x"], dtype=torch.float32)
-        y = torch.as_tensor(split["y"], dtype=torch.long)
+        x = torch.as_tensor(split["x"].copy(), dtype=torch.float32)
+        y = torch.as_tensor(split["y"].copy(), dtype=torch.long)
         dataloaders[split_name] = DataLoader(
             TensorDataset(x, y),
             batch_size=batch_size,
