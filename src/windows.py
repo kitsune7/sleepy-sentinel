@@ -15,7 +15,7 @@ like `subject_id`, `video_id`, `label`, and `window_idx`.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import pandas as pd
 
@@ -174,16 +174,23 @@ def write_windows_table(windows_df: pd.DataFrame, output_path: str | Path) -> No
         windows_df.to_parquet(output_path, index=False)
 
 
-def main() -> None:
+def main(argv: Sequence[str] | None = None) -> None:
     """Command-line entry point for generating the windows table."""
     import argparse
 
     parser = argparse.ArgumentParser(description="Build the alertness window table from per-frame CSVs.")
-    parser.add_argument("features_root", type=Path)
-    parser.add_argument("output_path", type=Path)
-    args = parser.parse_args()
+    parser.add_argument("features_root", type=Path, nargs="?")
+    parser.add_argument("output_path", type=Path, nargs="?")
+    parser.add_argument("--features-root", "--features_root", dest="features_root_flag", type=Path)
+    parser.add_argument("--output-path", "--output_path", dest="output_path_flag", type=Path)
+    args = parser.parse_args(argv)
 
-    write_windows_table(build_windows_table(args.features_root), args.output_path)
+    features_root = args.features_root_flag or args.features_root
+    output_path = args.output_path_flag or args.output_path
+    if features_root is None or output_path is None:
+        parser.error("features_root and output_path are required")
+
+    write_windows_table(build_windows_table(features_root), output_path)
 
 
 def _run_durations_seconds(mask: pd.Series, fps: float) -> list[float]:
@@ -205,3 +212,7 @@ def _run_durations_seconds(mask: pd.Series, fps: float) -> list[float]:
 
 def _mean_or_zero(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
+
+
+if __name__ == "__main__":
+    main()

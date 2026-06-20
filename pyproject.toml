@@ -9,6 +9,7 @@ dependencies = [
   "numpy",
   "opencv-python",
   "pandas>=3.0.3",
+  "pyarrow>=24.0.0",
   "scikit-learn>=1.9.0",
   "torch>=2.12.1",
 ]

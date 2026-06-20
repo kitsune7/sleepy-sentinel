@@ -115,3 +115,17 @@ def test_build_windows_table_preserves_subject_video_and_label_identifiers(tmp_p
     assert set(windows_df["subject_id"]) == {"01", "02"}
     assert set(windows_df["label"]) == {0}
     assert windows_df["window_idx"].min() == 0
+
+
+def test_main_supports_named_cli_arguments(tmp_path) -> None:
+    features_root = tmp_path / "features"
+    subject_dir = features_root / "01"
+    subject_dir.mkdir(parents=True)
+    make_frame_df().to_csv(subject_dir / "0.csv", index=False)
+    output_path = tmp_path / "windows.csv"
+
+    windows.main(["--features_root", str(features_root), "--output_path", str(output_path)])
+
+    actual = pd.read_csv(output_path, dtype={"subject_id": str})
+    assert set(actual["subject_id"]) == {"01"}
+    assert set(actual["label"]) == {0}
