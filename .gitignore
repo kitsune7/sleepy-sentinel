@@ -6,3 +6,5 @@ __pycache__/
 *.mp4
 *.m4v
 outputs
+wandb/
+.env

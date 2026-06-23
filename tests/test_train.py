@@ -84,3 +84,15 @@ def test_run_cross_validation_writes_assignment_artifacts(tmp_path) -> None:
     }
     assert expected_outputs.issubset({path.name for path in output_dir.iterdir()})
     assert set(results["fold_metrics"]["run"]) == {"baseline", "regularized"}
+    assert {
+        "train_loss",
+        "train_accuracy",
+        "train_qwk",
+        "train_rank_mae",
+        "train_macro_f1",
+        "validation_loss",
+        "validation_accuracy",
+        "validation_qwk",
+        "validation_rank_mae",
+        "validation_macro_f1",
+    }.issubset(results["learning_curves"].columns)

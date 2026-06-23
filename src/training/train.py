@@ -28,6 +28,11 @@ import torch
 from evaluation import metrics
 from training import dataset, models, splits
 
+try:
+    import wandb
+except ImportError:  # pragma: no cover - dependency is optional unless W&B is enabled
+    wandb = None
+
 
 def set_random_seeds(seed: int) -> None:
     """Set Python, NumPy, and PyTorch seeds for reproducibility."""
@@ -36,12 +41,22 @@ def set_random_seeds(seed: int) -> None:
     torch.manual_seed(seed)
 
 
+def _epoch_metric_summary(total_loss: float, total: int, y_true: list[int], y_pred: list[int]) -> dict[str, float]:
+    """Build the metric bundle logged for one train/validation epoch."""
+    if total == 0:
+        return {"loss": 0.0, "accuracy": 0.0, "qwk": 0.0, "rank_mae": 0.0, "macro_f1": 0.0}
+
+    metric_summary = metrics.classification_metric_summary(y_true, y_pred)
+    return {"loss": total_loss / total, **metric_summary}
+
+
 def train_one_epoch(model: Any, dataloader: Any, optimizer: Any, loss_fn: Any) -> dict[str, float]:
     """Run one training epoch and return training metrics."""
     model.train()
     total_loss = 0.0
-    correct = 0
     total = 0
+    y_true = []
+    y_pred = []
 
     for batch_x, batch_y in dataloader:
         optimizer.zero_grad()
@@ -51,19 +66,22 @@ def train_one_epoch(model: Any, dataloader: Any, optimizer: Any, loss_fn: Any) -
         optimizer.step()
 
         batch_size = len(batch_y)
+        predictions = logits.argmax(dim=1)
         total_loss += float(loss.item()) * batch_size
-        correct += int((logits.argmax(dim=1) == batch_y).sum().item())
         total += batch_size
+        y_true.extend(batch_y.detach().cpu().tolist())
+        y_pred.extend(predictions.detach().cpu().tolist())
 
-    return {"loss": total_loss / total if total else 0.0, "accuracy": correct / total if total else 0.0}
+    return _epoch_metric_summary(total_loss, total, y_true, y_pred)
 
 
 def evaluate_one_epoch(model: Any, dataloader: Any, loss_fn: Any) -> dict[str, float]:
     """Run one validation or test pass and return metrics."""
     model.eval()
     total_loss = 0.0
-    correct = 0
     total = 0
+    y_true = []
+    y_pred = []
 
     with torch.no_grad():
         for batch_x, batch_y in dataloader:
@@ -71,17 +89,77 @@ def evaluate_one_epoch(model: Any, dataloader: Any, loss_fn: Any) -> dict[str, f
             loss = loss_fn(logits, batch_y)
 
             batch_size = len(batch_y)
+            predictions = logits.argmax(dim=1)
             total_loss += float(loss.item()) * batch_size
-            correct += int((logits.argmax(dim=1) == batch_y).sum().item())
             total += batch_size
+            y_true.extend(batch_y.detach().cpu().tolist())
+            y_pred.extend(predictions.detach().cpu().tolist())
 
-    return {"loss": total_loss / total if total else 0.0, "accuracy": correct / total if total else 0.0}
+    return _epoch_metric_summary(total_loss, total, y_true, y_pred)
+
+
+def _init_wandb_run(
+    *,
+    project: str | None,
+    entity: str | None,
+    mode: str | None,
+    group: str,
+    run_name: str,
+    config: dict[str, Any],
+) -> Any | None:
+    """Create a W&B run when tracking is enabled."""
+    if project is None:
+        return None
+
+    if wandb is None:
+        raise RuntimeError("wandb is not installed. Install dependencies or omit --wandb-project.")
+
+    init_kwargs = {
+        "project": project,
+        "name": run_name,
+        "group": group,
+        "config": config,
+        "tags": ["cross-validation", run_name.split("-fold")[0]],
+    }
+    if entity is not None:
+        init_kwargs["entity"] = entity
+    if mode is not None:
+        init_kwargs["mode"] = mode
+
+    return wandb.init(**init_kwargs)
+
+
+def _log_epoch_metrics(wandb_run: Any | None, epoch: int, epoch_metrics: dict[str, dict[str, float]]) -> None:
+    """Log one epoch of train/validation metrics to W&B."""
+    if wandb_run is None:
+        return
+
+    wandb_run.log(
+        {
+            "epoch": epoch,
+            **{f"train/{metric_name}": value for metric_name, value in epoch_metrics["train"].items()},
+            **{
+                f"validation/{metric_name}": value
+                for metric_name, value in epoch_metrics["validation"].items()
+            },
+        },
+        step=epoch,
+    )
+
+
+def _log_final_test_metrics(wandb_run: Any | None, metric_row: dict[str, float], n_videos: int) -> None:
+    """Log fold-level video metrics after training finishes."""
+    if wandb_run is None:
+        return
+
+    wandb_run.log({**{f"test/{name}": value for name, value in metric_row.items()}, "test/n_videos": n_videos})
 
 
 def train_fold(
     fold_data: dict[str, Any],
     model_config: dict[str, Any],
     training_config: dict[str, Any],
+    wandb_run: Any | None = None,
 ) -> dict[str, Any]:
     """Train one model for one subject-wise fold."""
     set_random_seeds(training_config.get("seed", 0))
@@ -100,10 +178,12 @@ def train_fold(
     loss_fn = torch.nn.CrossEntropyLoss()
     history = []
 
-    for _ in range(training_config.get("epochs", 1)):
+    for epoch_idx in range(1, training_config.get("epochs", 1) + 1):
         train_metrics = train_one_epoch(model, dataloaders["train"], optimizer, loss_fn)
         validation_metrics = evaluate_one_epoch(model, dataloaders["validation"], loss_fn)
-        history.append({"train": train_metrics, "validation": validation_metrics})
+        epoch_metrics = {"train": train_metrics, "validation": validation_metrics}
+        history.append(epoch_metrics)
+        _log_epoch_metrics(wandb_run, epoch_idx, epoch_metrics)
 
     return {"model": model, "history": history}
 
@@ -151,12 +231,17 @@ def run_cross_validation(
     batch_size: int = 64,
     learning_rate: float = 1e-3,
     random_seed: int = 42,
+    wandb_project: str | None = None,
+    wandb_entity: str | None = None,
+    wandb_mode: str | None = None,
+    wandb_group: str | None = None,
 ) -> dict[str, Any]:
     """Run the full CV experiment and save fold-level outputs."""
     windows_df = pd.read_parquet(windows_path)
     windows_df["subject_id"] = windows_df["subject_id"].astype(str)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    wandb_group = wandb_group or output_dir.name
 
     base_folds = splits.make_group_folds(windows_df, n_splits=n_splits, random_seed=random_seed)
     folds = [
@@ -196,49 +281,77 @@ def run_cross_validation(
         )
 
         for run_name, model_config in model_runs.items():
-            model_result = train_fold(
-                fold_data,
-                model_config={
-                    "hidden_dims": model_config["hidden_dims"],
-                    "dropout": model_config["dropout"],
-                    "num_classes": 3,
-                },
-                training_config={
-                    **training_config,
-                    "weight_decay": model_config["weight_decay"],
-                    "seed": random_seed + fold_idx,
+            fold_run_name = f"{run_name}-fold{fold_idx}"
+            fold_model_config = {
+                "hidden_dims": model_config["hidden_dims"],
+                "dropout": model_config["dropout"],
+                "num_classes": 3,
+            }
+            fold_training_config = {
+                **training_config,
+                "weight_decay": model_config["weight_decay"],
+                "seed": random_seed + fold_idx,
+            }
+            wandb_run = _init_wandb_run(
+                project=wandb_project,
+                entity=wandb_entity,
+                mode=wandb_mode,
+                group=wandb_group,
+                run_name=fold_run_name,
+                config={
+                    "run": run_name,
+                    "fold": fold_idx,
+                    "n_splits": n_splits,
+                    "validation_subject_count": validation_subject_count,
+                    **fold_model_config,
+                    **fold_training_config,
                 },
             )
-
-            for epoch_idx, epoch_metrics in enumerate(model_result["history"], start=1):
-                learning_curves.append(
-                    {
-                        "run": run_name,
-                        "fold": fold_idx,
-                        "epoch": epoch_idx,
-                        "train_loss": epoch_metrics["train"]["loss"],
-                        "train_accuracy": epoch_metrics["train"]["accuracy"],
-                        "validation_loss": epoch_metrics["validation"]["loss"],
-                        "validation_accuracy": epoch_metrics["validation"]["accuracy"],
-                    }
+            try:
+                model_result = train_fold(
+                    fold_data,
+                    model_config=fold_model_config,
+                    training_config=fold_training_config,
+                    wandb_run=wandb_run,
                 )
 
-            test_predictions = predict_split(model_result["model"], fold_data, "test")
-            video_predictions = aggregate_window_predictions(test_predictions)
-            video_predictions.insert(0, "run", run_name)
-            video_predictions.insert(1, "fold", fold_idx)
-            prediction_tables.append(video_predictions)
+                for epoch_idx, epoch_metrics in enumerate(model_result["history"], start=1):
+                    learning_curves.append(
+                        {
+                            "run": run_name,
+                            "fold": fold_idx,
+                            "epoch": epoch_idx,
+                            **{
+                                f"train_{metric_name}": value
+                                for metric_name, value in epoch_metrics["train"].items()
+                            },
+                            **{
+                                f"validation_{metric_name}": value
+                                for metric_name, value in epoch_metrics["validation"].items()
+                            },
+                        }
+                    )
 
-            metric_row = metrics.classification_metric_summary(
-                video_predictions["label"],
-                video_predictions["pred_label"],
-            )
-            metric_row.update({"run": run_name, "fold": fold_idx, "n_videos": len(video_predictions)})
-            fold_metrics.append(metric_row)
+                test_predictions = predict_split(model_result["model"], fold_data, "test")
+                video_predictions = aggregate_window_predictions(test_predictions)
+                video_predictions.insert(0, "run", run_name)
+                video_predictions.insert(1, "fold", fold_idx)
+                prediction_tables.append(video_predictions)
 
-            metrics.confusion_matrix_table(video_predictions["label"], video_predictions["pred_label"]).to_csv(
-                output_dir / f"{run_name}_fold{fold_idx}_confusion_matrix.csv"
-            )
+                metric_row = metrics.classification_metric_summary(
+                    video_predictions["label"],
+                    video_predictions["pred_label"],
+                )
+                _log_final_test_metrics(wandb_run, metric_row, len(video_predictions))
+                metric_row.update({"run": run_name, "fold": fold_idx, "n_videos": len(video_predictions)})
+                fold_metrics.append(metric_row)
+
+                metrics.confusion_matrix_table(video_predictions["label"], video_predictions["pred_label"]).to_csv(
+                    output_dir / f"{run_name}_fold{fold_idx}_confusion_matrix.csv"
+                )
+            finally:
+                if wandb_run is not None:
+                    wandb_run.finish()
 
     split_summaries_df = pd.concat(split_summaries, ignore_index=True)
     learning_curves_df = pd.DataFrame(learning_curves)
@@ -286,6 +399,10 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--random-seed", type=int, default=42)
+    parser.add_argument("--wandb-project", type=str, default=None, help="Enable W&B logging for each model/fold run.")
+    parser.add_argument("--wandb-entity", type=str, default=None, help="Optional W&B team or username.")
+    parser.add_argument("--wandb-mode", choices=["online", "offline", "disabled"], default=None)
+    parser.add_argument("--wandb-group", type=str, default=None, help="Optional W&B group name for the CV run.")
     args = parser.parse_args()
 
     results = run_cross_validation(
@@ -297,6 +414,10 @@ def main() -> None:
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
         random_seed=args.random_seed,
+        wandb_project=args.wandb_project,
+        wandb_entity=args.wandb_entity,
+        wandb_mode=args.wandb_mode,
+        wandb_group=args.wandb_group,
     )
     print(f"Wrote train/eval artifacts to {args.output_dir}")
     print(results["metric_summary"])
