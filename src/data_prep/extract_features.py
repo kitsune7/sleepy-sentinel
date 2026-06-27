@@ -67,7 +67,9 @@ from mediapipe.tasks.python import vision as mp_vision
 # filename stem -> ordinal class label
 LABEL_MAP = {"0": 0, "5": 1, "10": 2}
 
-MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
+MODEL_URL = (
+    "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
+)
 
 # Conventional MediaPipe FaceMesh 6-point eye landmark indices for EAR.
 # Order per eye: [h_corner_a, v_top_a, v_top_b, h_corner_b, v_bot_b, v_bot_a].
@@ -82,17 +84,25 @@ BS_JAW_OPEN = "jawOpen"
 
 # CSV columns written per frame.
 COLUMNS = [
-    "frame_idx", "t_ms", "face",
-    "eye_blink_l", "eye_blink_r", "ear",
+    "frame_idx",
+    "t_ms",
+    "face",
+    "eye_blink_l",
+    "eye_blink_r",
+    "ear",
     "jaw_open",
-    "pitch", "yaw", "roll",
-    "bright_mean", "warmth",   # for the luminance-confound baseline
+    "pitch",
+    "yaw",
+    "roll",
+    "bright_mean",
+    "warmth",  # for the luminance-confound baseline
 ]
 
 
 # --------------------------------------------------------------------------- #
 # Geometry helpers
 # --------------------------------------------------------------------------- #
+
 
 def eye_aspect_ratio(landmarks, idx, w, h):
     """EAR = (||p2-p6|| + ||p3-p5||) / (2 * ||p1-p4||) on pixel coords."""
@@ -208,6 +218,7 @@ def monotonic_timestamp_ms(raw_t_ms, frame_idx, fps, previous_t_ms):
 # Core: one video -> one CSV (streaming, frame by frame)
 # --------------------------------------------------------------------------- #
 
+
 def make_landmarker(model_path):
     options = mp_vision.FaceLandmarkerOptions(
         base_options=mp_python.BaseOptions(model_asset_path=model_path),
@@ -269,28 +280,44 @@ def process_video(video_path, out_csv, landmarker, frame_stride=1, show_progress
             ear_r = eye_aspect_ratio(lms, RIGHT_EYE_IDX, w, h)
             ear = np.nanmean([ear_l, ear_r])
             if result.facial_transformation_matrixes:
-                pitch, yaw, roll = rotation_to_euler(
-                    result.facial_transformation_matrixes[0]
-                )
+                pitch, yaw, roll = rotation_to_euler(result.facial_transformation_matrixes[0])
             else:
                 pitch = yaw = roll = float("nan")
-            rows.append([
-                frame_idx, round(t_ms, 2), 1,
-                bs.get(BS_BLINK_L, float("nan")),
-                bs.get(BS_BLINK_R, float("nan")),
-                round(float(ear), 5),
-                bs.get(BS_JAW_OPEN, float("nan")),
-                round(pitch, 3), round(yaw, 3), round(roll, 3),
-                round(bright, 3), round(warmth, 5),
-            ])
+            rows.append(
+                [
+                    frame_idx,
+                    round(t_ms, 2),
+                    1,
+                    bs.get(BS_BLINK_L, float("nan")),
+                    bs.get(BS_BLINK_R, float("nan")),
+                    round(float(ear), 5),
+                    bs.get(BS_JAW_OPEN, float("nan")),
+                    round(pitch, 3),
+                    round(yaw, 3),
+                    round(roll, 3),
+                    round(bright, 3),
+                    round(warmth, 5),
+                ]
+            )
         else:
             # No face this frame: flag it, leave feature columns as NaN.
             nan = float("nan")
-            rows.append([
-                frame_idx, round(t_ms, 2), 0,
-                nan, nan, nan, nan, nan, nan, nan,
-                round(bright, 3), round(warmth, 5),
-            ])
+            rows.append(
+                [
+                    frame_idx,
+                    round(t_ms, 2),
+                    0,
+                    nan,
+                    nan,
+                    nan,
+                    nan,
+                    nan,
+                    nan,
+                    nan,
+                    round(bright, 3),
+                    round(warmth, 5),
+                ]
+            )
 
     cap.release()
     if show_progress:
@@ -309,6 +336,7 @@ def process_video(video_path, out_csv, landmarker, frame_stride=1, show_progress
 # --------------------------------------------------------------------------- #
 # Batch driver
 # --------------------------------------------------------------------------- #
+
 
 def iter_videos(root):
     """Yield (subject_id, label, video_path) for every N/{0,5,10}.* under root."""
@@ -347,23 +375,19 @@ def run_one(video_path, out_csv, args):
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--model", default="face_landmarker.task",
-                    help="path to the FaceLandmarker .task bundle")
-    ap.add_argument("--model-url", default=MODEL_URL,
-                    help="URL to download the FaceLandmarker .task bundle from")
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--model", default="face_landmarker.task", help="path to the FaceLandmarker .task bundle")
+    ap.add_argument("--model-url", default=MODEL_URL, help="URL to download the FaceLandmarker .task bundle from")
     ap.add_argument("--out", help="output root for the CSVs")
-    ap.add_argument("--frame-stride", type=int, default=1,
-                    help="process every Nth frame (1 = all; keep 1 for blink fidelity)")
-    ap.add_argument("--overwrite", action="store_true",
-                    help="re-extract even if the output CSV already exists")
-    ap.add_argument("--delete-source", action="store_true",
-                    help="delete each source video AFTER its CSV is written")
-    ap.add_argument("--no-progress", action="store_true",
-                    help="disable per-video terminal progress bars")
-    ap.add_argument("--keep-going", action="store_true", default=True,
-                    help="continue past per-video errors (default on)")
+    ap.add_argument(
+        "--frame-stride", type=int, default=1, help="process every Nth frame (1 = all; keep 1 for blink fidelity)"
+    )
+    ap.add_argument("--overwrite", action="store_true", help="re-extract even if the output CSV already exists")
+    ap.add_argument("--delete-source", action="store_true", help="delete each source video AFTER its CSV is written")
+    ap.add_argument("--no-progress", action="store_true", help="disable per-video terminal progress bars")
+    ap.add_argument(
+        "--keep-going", action="store_true", default=True, help="continue past per-video errors (default on)"
+    )
     # one of:
     ap.add_argument("--root", help="dataset root containing subject folders")
     ap.add_argument("--video", help="single video file (use with --subject/--label)")
@@ -383,9 +407,11 @@ def main():
     if not args.out:
         sys.exit("provide --out for extraction output")
     if not os.path.exists(args.model):
-        sys.exit(f"model not found: {args.model}\n"
-                 f"download it with:\n  curl -L \"{args.model_url}\" -o {args.model}\n"
-                 "or rerun with --download-model.")
+        sys.exit(
+            f"model not found: {args.model}\n"
+            f'download it with:\n  curl -L "{args.model_url}" -o {args.model}\n'
+            "or rerun with --download-model."
+        )
 
     print("Starting feature extraction...")
     if args.video:

@@ -80,10 +80,7 @@ def iter_window_bounds(frame_df: pd.DataFrame, window_sec: float, stride_sec: fl
     window_frames = round(window_sec * fps)
     stride_frames = round(stride_sec * fps)
 
-    return [
-        (start, start + window_frames)
-        for start in range(0, len(frame_df) - window_frames + 1, stride_frames)
-    ]
+    return [(start, start + window_frames) for start in range(0, len(frame_df) - window_frames + 1, stride_frames)]
 
 
 def is_valid_window(window_df: pd.DataFrame, max_missing_face_fraction: float) -> bool:

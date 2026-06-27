@@ -20,11 +20,6 @@ import numpy as np
 import pandas as pd
 
 
-def get_subject_ids(windows_df: pd.DataFrame) -> list[str]:
-    """Return the sorted unique subject IDs in the windows table."""
-    return sorted(windows_df["subject_id"].astype(str).unique())
-
-
 def make_group_folds(windows_df: pd.DataFrame, n_splits: int, random_seed: int) -> list[dict[str, list[str]]]:
     """Create subject-wise cross-validation folds with train/test subject assignments."""
     subject_ids = get_subject_ids(windows_df)
@@ -39,11 +34,16 @@ def make_group_folds(windows_df: pd.DataFrame, n_splits: int, random_seed: int) 
     folds = []
 
     for test_group in test_groups:
-        test_subjects = sorted(str(subject_id) for subject_id in test_group.tolist())
+        test_subjects = sorted(subject_id for subject_id in test_group.tolist())
         train_subjects = sorted(subject_id for subject_id in subject_ids if subject_id not in test_subjects)
         folds.append({"train": train_subjects, "test": test_subjects})
 
     return folds
+
+
+def get_subject_ids(windows_df: pd.DataFrame) -> list[str]:
+    """Return the sorted unique subject IDs in the windows table."""
+    return sorted(windows_df["subject_id"].unique())
 
 
 def add_validation_subjects(
@@ -52,7 +52,7 @@ def add_validation_subjects(
     random_seed: int,
 ) -> dict[str, list[str]]:
     """Move some training subjects into a validation set for one fold."""
-    train_subjects = list(fold["train"])
+    train_subjects = fold["train"]
     if validation_subject_count < 0:
         raise ValueError("validation_subject_count cannot be negative")
     if validation_subject_count >= len(train_subjects):
