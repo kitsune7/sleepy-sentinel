@@ -46,6 +46,16 @@ def test_make_group_folds_holds_out_each_subject_once_without_overlap() -> None:
     assert sorted(all_test_subjects) == ["01", "02", "03", "04", "05", "06"]
 
 
+def test_make_loso_folds_holds_out_one_subject_per_fold() -> None:
+    folds = splits.make_loso_folds(make_windows_df())
+
+    assert len(folds) == 6
+    assert [fold["test"] for fold in folds] == [["01"], ["02"], ["03"], ["04"], ["05"], ["06"]]
+    for fold in folds:
+        assert len(fold["test"]) == 1
+        assert set(fold["train"]).isdisjoint(fold["test"])
+
+
 def test_add_validation_subjects_moves_subjects_out_of_training_only() -> None:
     fold = {"train": ["01", "02", "03", "04"], "test": ["05", "06"]}
 

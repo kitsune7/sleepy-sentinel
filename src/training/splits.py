@@ -41,6 +41,21 @@ def make_group_folds(windows_df: pd.DataFrame, n_splits: int, random_seed: int) 
     return folds
 
 
+def make_loso_folds(windows_df: pd.DataFrame) -> list[dict[str, list[str]]]:
+    """Create leave-one-subject-out folds with one held-out test subject per fold."""
+    subject_ids = get_subject_ids(windows_df)
+    if len(subject_ids) < 2:
+        raise ValueError("LOSO requires at least two subjects")
+
+    return [
+        {
+            "train": [train_subject_id for train_subject_id in subject_ids if train_subject_id != test_subject_id],
+            "test": [test_subject_id],
+        }
+        for test_subject_id in subject_ids
+    ]
+
+
 def get_subject_ids(windows_df: pd.DataFrame) -> list[str]:
     """Return the sorted unique subject IDs in the windows table."""
     return sorted(windows_df["subject_id"].unique())

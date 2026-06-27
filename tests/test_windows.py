@@ -91,6 +91,10 @@ def test_summarize_window_computes_assignment_features() -> None:
         "frac_head_down",
         "yaw_std",
         "roll_std",
+        "bright_mean",
+        "bright_std",
+        "warmth_mean",
+        "warmth_std",
         "frac_face_missing",
     }
     assert set(summary) == expected_keys

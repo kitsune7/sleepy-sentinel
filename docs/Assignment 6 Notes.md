@@ -1,169 +1,160 @@
-# Assignment 6 — Tabular Modeling and Model-Choice Justification
-
-## TL;DR for this assignment (read first)
-
-- The portfolio data is **already tabular** (per-window feature CSVs → ~17 numeric features). So: **no proxy translator needed.** Part A uses the portfolio dataset directly. Say so explicitly — it's a graded distinction.
-- The new work is a **fair model-choice comparison**: a **classical tabular baseline** (LightGBM or logistic/ordinal regression) vs. the **MLP we already built in A5**, under the _same_ subject-wise CV, same window→video aggregation, same QWK/rank-MAE/confusion metrics.
-- This also closes two gaps the A5 notes left open: no `baselines.py`, and no model-vs-model comparison. Reuse everything possible — splits, metrics, dataset prep all already exist.
-- The assignment does **not** require the neural model to win. The deliverable is an honest "MLP earns its complexity / it doesn't" argument.
-
-### What's reusable vs. new
-
-| Already exists (reuse as-is)                              | New for A6                                                                |
-| --------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `src/training/splits.py` (GroupKFold, disjoint asserts)   | A classical baseline model (LightGBM or logistic/ordinal reg)             |
-| `src/training/dataset.py` (train-only scaler, fold prep)  | `baselines.py` _(or extend `train.py`'s `model_runs`)_                    |
-| `src/evaluation/metrics.py` (QWK, rank-MAE, confusion)    | Results table: baseline vs. MLP, side by side                             |
-| `src/training/train.py` (`model_runs`, per-epoch logging) | "Are embeddings appropriate?" note (likely **no** — all features numeric) |
-| A5 MLP runs (baseline + regularized)                      | Practical-constraints + responsible-use discussion for _tabular_ choice   |
-| `folds.json`, `metric_summary.csv`, etc.                  | Part B checkpoint                                                         |
-
----
-
 # Part A — Portfolio tabular representation and model comparison
 
 > Scope boundary: one focused comparison, not a model tournament. A small number
 > of diagnostic variants is fine; no exhaustive hyperparameter/architecture search.
 
-## A1. Problem, stakeholder, dataset, target, inputs — and data-type declaration
+## Problem, stakeholder, dataset, target, inputs — and data-type declaration
 
 > State the portfolio problem, client/stakeholder scenario, dataset, prediction
 > target, candidate inputs, and whether Part A uses native tabular portfolio
 > data, a portfolio-derived proxy, or approved fallback case-study materials.
 
-- **Problem / stakeholder:** _(carry forward 1–2 sentences from the charter —
-  personal early-fatigue aid; the "client" is me / a future self-monitoring user)_
-- **Dataset:** UTA-RLDD, 60 subjects × 3 videos → per-window feature CSVs in
-  `data/<subject>/{0,5,10}.csv`. _(fill in window/row counts)_
-- **Target:** ordinal `y ∈ {0,1,2}` = {alert, low-vigilant, drowsy}, scored at
-  video level.
-- **Candidate inputs:** the ~17 model features _(list or point to charter
-  "Candidate input features")_.
-- **DATA-TYPE DECLARATION (do not skip):** **Native tabular portfolio data.**
-  The raw modality is video, but our portfolio representation _is already_ a
-  tabular feature table extracted in A-prior work — so we use the portfolio
-  dataset directly and **do not** use a Week 6 proxy translator. _(state this
-  plainly; it's the cleanest path and graded)_
+- **Problem / stakeholder:** The portfolio problem is a personal early-fatigue aid: given a short live-video window, estimate whether the user appears alert, low-vigilant, or drowsy. The immediate stakeholder is me / a future self-monitoring user, not an employer, clinician, or safety-critical operator.
+- **Dataset:** UTA-RLDD, 60 subjects × 3 videos → per-window feature CSVs in `data/<subject>/{0,5,10}.csv`. The LOSO outputs cover 180 held-out videos, with each test fold holding out one subject's three videos. Each video contributes roughly 50-116 windows depending on frame availability.
+- **Target:** ordinal `y ∈ {0,1,2}` = {alert, low-vigilant, drowsy}, scored at video level.
+- **Candidate inputs:** numeric geometric/temporal summaries extracted from the video windows, including eye-aspect-ratio features, blink/PERCLOS-style eye closure summaries, mouth/yawn-related features, head-pose summaries, and quality/confound fields such as face-missing fraction and luminance.
+- **Data-type:** Native tabular portfolio data. The raw modality is video, but our portfolio representation _is already_ a tabular feature table extracted in A-prior work — so I use the portfolio dataset directly.
 
-## A2. Proxy / fallback notes — N/A, but state it
+## Proxy / fallback notes
 
 > If using a proxy, describe the transformation and what it preserves/loses.
 > If using fallback materials, explain the blocker.
 
-- **Not applicable.** One sentence each:
-  - No proxy translator used — data is natively tabular. _(optional: note that
-    the video→feature extraction in `src/data_prep/` is *our own* domain
-    representation, not the generic Week 6 proxy, and what it deliberately
-    discards — raw pixels, identity — which is a feature not a bug here.)_
-  - No fallback case study — portfolio data is downloaded, labeled, and legally
-    usable for research.
+- Technically, the tabular data is a proxy for the original video stream: it preserves selected fatigue-relevant geometric, eye-closure, yawn, head-pose, and quality cues, while losing subtle video cues that were not extracted into the window table. This proxy is not new for Assignment 6; it is the portfolio's working representation.
+- No fallback case study is needed because the portfolio data is downloaded, labeled, and usable for research.
 
-## A3. Feature preparation (leakage + prediction-time availability)
+## Feature preparation (leakage + prediction-time availability)
 
 > Prepare numeric/categorical/missing/rare/high-cardinality features without
 > leakage; keep prediction-time availability clear.
 
-- **All features numeric** → no categorical encoding / no high-cardinality
-  handling needed. _(this is also the reason embeddings are likely N/A — see A6)_
-- **Leakage controls (reuse from A5, just cite them):**
+- **All features numeric** → no categorical encoding / no high-cardinality handling needed. This is also why embeddings are N/A.
+- **Leakage controls:**
   - Train-only `StandardScaler` — `dataset.prepare_fold_datasets`.
   - Subject-wise split, disjointness asserted — `splits.assert_disjoint_subjects`.
-  - Per-subject EAR normalization uses only that subject's own frames; alert
-    video never used as baseline.
-- **Missingness:** `frac_face_missing` gate / interpolation rule _(cite charter)_.
-- **Prediction-time availability:** every feature computable from one live
-  window — one sentence confirming this still holds for both models.
-- ⚠️ **Tree-model note:** if you use LightGBM, the StandardScaler is unnecessary
-  for it (trees are scale-invariant) — but keep the _split_ identical. Either
-  feed LightGBM unscaled or scaled; just document which. The MLP **must** keep
-  the scaler.
+  - Per-subject EAR normalization uses only that subject's own frames; alert video never used as baseline.
+- **Missingness:** low-quality windows are controlled through the
+  `frac_face_missing` feature/gate and the existing interpolation rule from the feature pipeline, so both the MLP and the baselines see the same usable-window population.
+- **Prediction-time availability:** every feature computable from one live window. PERCLOS, luminance, and the full MLP feature set are therefore available at inference time without using future frames or another subject's data.
+- **Baseline-prep note:** the simple baselines use narrow feature slices (majority, luminance-only, PERCLOS-only), so they do not need the full MLP feature scaling path. The MLP keeps the training-fold-only scaler.
 
-## A4. Simple baseline model
+## Simple baseline model
 
 > Train at least one simple baseline (logistic/linear, tree-based, or other
 > classical model).
 
-- **Chosen baseline:** _(pick ONE primary — recommend **LightGBM**, since the
-  charter already names it as a fallback model and it's the strongest classical
-  tabular contender; logistic/ordinal regression is the lazier alternative)_
-- Key settings: _(fill in — n_estimators, depth, etc. Keep it small.)_
-- **Ordinal handling:** note whether you treat it as 3-class or use an
-  ordinal/threshold decomposition — must match how QWK is computed.
-- Command + seed: _(fill in)_
+- **Chosen baseline:** A logistic regression using only PERCLOS is the primary simple baseline because it is clinically/task-relevant, prediction-time available, and much easier to explain than the full MLP. I also ran majority and luminance-only floors.
+- **Key settings:** the baseline models use the same subject-wise LOSO folds, the same window→video aggregation, and the same video-level QWK/rank-MAE/
+  accuracy/macro-F1 reporting. The majority baseline is a floor; luminance-only is the confound check; PERCLOS-only is the serious simple-model comparator.
+- **Ordinal handling:** predictions are still evaluated as the same three ordered classes `{0,1,2}`. QWK and rank-MAE therefore preserve the ordinal penalty even when the model itself is a simple classifier/baseline.
+- **Outputs:** root `outputs/metric_summary.csv`, `outputs/fold_metrics.csv`,
+  `outputs/video_predictions.csv`, and per-fold confusion matrices.
 
-## A5. Neural tabular model
+## Neural tabular model
 
 > Train at least one neural model appropriate for tabular data (MLP / embeddings).
 
-- **Reuse the A5 MLP** (`(64,32)` ReLU, the regularized variant: dropout 0.25 +
-  wd 1e-4). _(state whether this is verbatim the A5 run or re-run for A6)_
+- **Reuse/re-run the assignment 5 MLP** (`(64,32)` ReLU, the regularized variant: dropout 0.25 + wd 1e-4), but evaluate it in the cleaner assignment 6 setup: LOSO rather than 5-fold GroupKFold, and validation-aware checkpoint selection.
 - **Generalization practices (required for the MLP):**
-  - ☐ Training-split normalization — already done (scaler).
-  - ☐ **Validation-aware early stopping / checkpoint selection** — A5 used fixed
-    100 epochs and flagged this as a gap. **A6 is the place to add early
-    stopping on val QWK.** _(if you add it, say so and re-report; if not, justify)_
-  - ☐ One regularization control — dropout + weight decay already in place.
-- Command + seed: _(fill in)_
+  - Training-split normalization — already done with the scaler fit only on the training fold.
+  - **Validation-aware early stopping / checkpoint selection** — added for this assignment. The MLP stopped early in 58/60 folds; best epoch had mean 6.0, median 4.0, min 1, max 36. This confirms the assignment 5 diagnosis that fixed 100-epoch training was overtraining.
+  - One regularization control — dropout + weight decay already in place.
+- **Outputs:** root `outputs/metric_summary.csv`, `outputs/fold_metrics.csv`,
+  `outputs/learning_curves.csv`, and `outputs/video_predictions.csv`.
 
-## A6. Categorical embeddings — appropriate or not?
+## Categorical embeddings — appropriate or not?
 
 > Use categorical embeddings if appropriate; if not, briefly explain why.
 
-- **Likely NOT appropriate** — write 2–3 sentences: all ~17 inputs are
-  continuous geometric/temporal summaries; there are no categorical or
-  high-cardinality ID features to embed. _(confirm there's truly no categorical
-  feature before asserting this.)_
+- **Not appropriate.** The model inputs are continuous numeric geometric/temporal summaries, not categorical tokens or high-cardinality IDs. Adding categorical embeddings would either require inventing categorical features that are not part of the intended inference signal, or embedding subject identity, which would be leakage for the actual goal of generalizing to a new person.
 
-## A7. Fair comparison — same target, split, metrics
+## Fair comparison — same target, split, metrics
 
 > Compare using the same target, split/eval procedure, and task-relevant
 > metrics. Validation evidence for selection; test reserved for final reporting.
 
-- Both models: same `folds.json`, same window→video aggregation, same
-  `evaluation/metrics.py`.
-- **Selection on validation, report on test** — state explicitly which numbers
-  drove the choice vs. which are final.
+- All runs use the same LOSO `folds.json`, same window→video aggregation, and same video-level metrics.
+- For the MLP, validation subjects inside each training fold select the checkpoint / early-stopping epoch. The reported numbers are held-out test videos: one unseen subject and three videos per fold, repeated across 60 folds.
+- Because each LOSO test fold contains only three videos, fold-level metrics are very quantized. The mean ± std across folds is still the honest LOSO report, but pooled 180-video summaries and summed confusion matrices are useful interpretation aids.
 
-## A8. Results table
+## Results
 
 > Compact table: each model, key settings, metrics, practical notes.
 
-| Model                          | Key settings                  | QWK (mean±std)  | rank-MAE | Accuracy | macro-F1 | Practical notes |
-| ------------------------------ | ----------------------------- | --------------- | -------- | -------- | -------- | --------------- |
-| MLP (regularized, A5)          | (64,32), dropout .25, wd 1e-4 | _0.400 ± 0.158_ | _0.611_  | _0.489_  | _0.483_  | _(from A5)_     |
-| _Baseline (LightGBM / logreg)_ | _(fill in)_                   | _(fill in)_     | _(fill)_ | _(fill)_ | _(fill)_ | _(fill in)_     |
+| Model             | Key settings                                | QWK (mean±std) | rank-MAE (mean±std) | Accuracy (mean±std) | macro-F1 (mean±std) | Practical notes |
+| ----------------- | ------------------------------------------- | -------------- | ------------------- | ------------------- | ------------------- | --------------- |
+| Majority          | predicts the majority class                 | 0.000 ± 0.000  | 0.944 ± 0.125       | 0.333 ± 0.000       | 0.167 ± 0.000       | sanity floor |
+| Luminance-only    | confound baseline                           | 0.048 ± 0.502  | 0.844 ± 0.400       | 0.361 ± 0.248       | 0.258 ± 0.244       | near chance; brightness is not enough |
+| PERCLOS-only      | simple task-specific tabular baseline       | **0.410 ± 0.414** | **0.617 ± 0.357** | **0.517 ± 0.241** | **0.405 ± 0.272** | simplest serious model; slightly best |
+| MLP (regularized) | `(64,32)`, dropout .25, wd 1e-4, early stop | 0.363 ± 0.382  | 0.650 ± 0.339       | 0.483 ± 0.233       | 0.370 ± 0.254       | more complex; does not beat PERCLOS |
 
-- Include summed-over-folds **confusion matrices** for both (the alert↔drowsy
-  off-by-two corners are the result that matters — see A5).
+Pooled across the 180 held-out videos, the same pattern holds: PERCLOS-only scores QWK 0.409 / accuracy 0.517, while the regularized MLP scores QWK 0.353 / accuracy 0.483. Both reduce the dangerous off-by-two alert↔drowsy errors to 24/180, compared with 37/180 for luminance and 50/180 for majority.
 
-## A9. Practical constraints
+Summed-over-folds confusion matrices (rows = true, columns = predicted):
+
+```
+PERCLOS-only                      MLP regularized
+         pred a  l  d                      pred a  l  d
+true alert   48  7  5             true alert   36 13 11
+true low     32 14 14             true low     25 18 17
+true drowsy  19 10 31             true drowsy  13 14 33
+```
+
+PERCLOS is much better on true alert videos (48/60 correct vs. 36/60) and the MLP is slightly better on true drowsy videos (33/60 vs. 31/60). Both struggle with the low-vigilant middle class, which is expected for an ordinal midpoint.
+
+## Commands and Logs
+
+I ran `uv run train_alertness --wandb-project sleepy-sentinel` to get the output logs in `./outputs` and W&B. Without W&B, run `uv run train_alertness`. This runs the full pipeline with the default parameters below.
+
+### Default parameters
+
+| Flag | Type | Default | Help |
+| --- | --- | --- | --- |
+| `windows_path` | `Path` | `data/frame_windows.parquet` | |
+| `output_dir` | `Path` | `outputs` | |
+| `--epochs` | `int` | `40` | |
+| `--batch-size` | `int` | `64` | |
+| `--random-seed` | `int` | `42` | |
+| `--learning-rate` | `float` | `1e-3` | |
+| `--n-splits` | `int` | `None` | Override LOSO with grouped K-fold CV. |
+| `--validation-subject-count` | `int` | `9` | |
+| `--early-stopping-patience` | `int` | `8` | Validation-QWK patience; negative disables. |
+| `--wandb-project` | `str` | `None` | Enable W&B logging for each model/fold run. |
+| `--wandb-entity` | `str` | `None` | Optional W&B team or username. |
+| `--wandb-mode` | `online`, `offline`, or `disabled` | `None` | |
+| `--wandb-group` | `str` | `None` | Optional W&B group name for the CV run. |
+
+The seed is fixed at `42` by default. PyTorch training can still have small hardware/library nondeterminism, so the saved CSVs in `outputs/` are the specific run evidence used for this writeup.
+
+## Dataset citation
+
+Ghoddoosian, Galib, and Athitsos, "A Realistic Dataset and Baseline Temporal
+Model for Early Drowsiness Detection," CVPR Workshops 2019.
+
+## Practical constraints
 
 > Interpretability, cost, training/inference complexity, maintainability, data
 > size, ease of monitoring.
 
-- _(fill in — honest comparison. Likely angles: LightGBM is more interpretable
-  (feature importances), trains/infers trivially, no scaler to maintain at
-  serve time; MLP needs the scaler + checkpoint + more monitoring. Data is tiny
-  (~60 subjects) which generally favors the simpler model.)_
+- The practical comparison favors PERCLOS-only right now. It is transparent, cheap to compute, easy to monitor, and much easier to explain: the system is mostly reacting to eye-closure behavior rather than an opaque mix of 17 features.
+- The MLP has higher operational complexity: a scaler artifact, a learned checkpoint, validation-aware training, and more monitoring burden. With only 60 subjects, that complexity would be justified only if it clearly beat the simpler baseline. It does not.
+- The small dataset remains the limiting factor. LOSO is stricter and more appropriate than the earlier 5-fold report, but each test fold has only one subject / three videos, so the across-fold standard deviations are large.
 
-## A10. Responsible-use concern (tabular-specific)
+## Responsible-use concern (tabular-specific)
 
 > At least one: sensitive features, proxy variables, fairness across groups,
 > automation bias, human-review needs.
 
-- _(fill in — strongest candidates: **proxy-variable / lighting confound**
-  (luminance leaking as a proxy for alertness — still untested per A5);
-  **fairness** given the 51M/9F + ethnicity cohort skew; **automation bias** if
-  a confidence-gated warning fires on a poorly-calibrated model.)_
+- **Proxy-variable / lighting confound:** this is now partly tested. The luminance-only baseline is near chance (QWK 0.048, accuracy 0.361), so the current signal is probably not just brightness. That reduces, but does not eliminate, the confound risk because lighting can still interact with face and eye tracking quality.
+- **Fairness and representativeness:** UTA-RLDD has limited subject diversity, and the model is evaluated on only 60 people. A face/eye-based tabular model could behave differently across glasses, facial hair, skin tone, camera angle, and lighting conditions even if those attributes are not explicit features.
+- **Automation bias:** confidence remains weakly informative. In the assignment 6 outputs, MLP mean confidence is 0.480 on correct predictions vs. 0.435 on incorrect predictions; PERCLOS is 0.449 vs. 0.410. Those small gaps are not enough to support a high-stakes automated warning threshold.
 
-## A11. Recommendation
+## Recommendation
 
 > Is a tabular approach justified? Is the neural model justified over the baseline?
 
-- **Tabular approach justified?** _(almost certainly yes — it's our native rep)_
-- **Neural over baseline?** _(answer on evidence: does the MLP beat the
-  classical baseline on QWK with non-overlapping bands? If not — and given the
-  charter's "simpler-and-equal wins" rule — recommend the simpler model.)_
+- **Tabular approach justified?** Yes. It is the native representation for this portfolio project, and both PERCLOS-only and the MLP beat the majority and luminance floors.
+- **Neural over baseline?** No, not yet. The regularized MLP does not beat the simpler PERCLOS-only baseline under LOSO: QWK 0.363 vs. 0.410, accuracy 0.483 vs. 0.517, and rank-MAE 0.650 vs. 0.617. The bands are wide and overlapping, but the burden of proof is on the more complex model. By the charter's simpler-and-equal rule, the current recommendation is to treat PERCLOS-only as the stronger candidate until a richer model clearly improves the dangerous off-by-two errors or the drowsy-class recall without sacrificing simplicity.
 
 ---
 
@@ -171,69 +162,12 @@
 
 > Keep concise but specific.
 
-- **Current data readiness:** _(fill — features extracted, folds saved, etc.)_
-- **Current baseline / model status:** _(A5 MLP done; classical baseline added
-  this week; Stage 0 luminance/PERCLOS floors still not implemented)_
-- **One concrete next experiment:** _(recommend: implement the luminance-only
-  confound baseline — the single biggest untested risk from A5)_
-- **Expected staged improvement before final package:** _(map to charter Stage
-  2/3 — LOSO, CORN A/B, feature ablation vs PERCLOS-only)_
-- **How Week 6 evidence affects the final model-choice argument:** _(fill —
-  e.g. "if LightGBM ≈ MLP, the final pick leans simpler/interpretable")_
-- **Charter/audit updates, emphasis, or still-untested:** _(fill — lighting
-  confound still untested; confidence calibration still weak)_
+- **Current data readiness:** features are extracted, subject-wise folds are saved, leakage checks are in place, and the root `outputs/` directory now has LOSO metrics, video predictions, learning curves, and confusion matrices for majority, luminance, PERCLOS, and the regularized MLP.
+- **Current baseline / model status:** the assignment 5 regularized MLP is re-evaluated with early stopping under LOSO. Stage 0 floors are now implemented. PERCLOS is the best current candidate; luminance is near chance; the MLP is useful but has not earned its extra complexity.
+- **One concrete next experiment:** test whether the full feature set can beat PERCLOS with a simpler interpretable tabular model (for example logistic/
+  ordinal regression or a shallow tree model), using the exact same LOSO folds. If it cannot beat PERCLOS, keep PERCLOS.
+- **Expected staged improvement before final package:** compare CORN or another ordinal head against both the regularized MLP and PERCLOS-only, but require a real gain on QWK/rank-MAE and the alert↔drowsy off-by-two corners. A higher mean alone is not enough if the fold bands remain this wide.
+- **How Week 6 evidence affects the final model-choice argument:** the final argument now leans simpler. The tabular representation is validated, but the neural model is not yet justified over the PERCLOS-only baseline.
+- **Charter/audit updates, emphasis, or still-untested:** lighting as a sole explanation is reduced by the luminance baseline, but subgroup robustness and confidence calibration remain unproven.
 - **Relevance of tabular methods / embeddings / simpler baselines:** tabular =
-  **directly relevant** (native rep); embeddings = **not relevant** (no
-  categoricals); simpler baselines = **directly relevant** (the whole point).
-
----
-
-# CHECKLIST
-
-### Code / artifacts
-
-- [ ] Add a classical baseline — new `src/training/baselines.py` **or** a new
-      entry in `train.py`'s `model_runs`. (LightGBM recommended; logreg = lazy option.)
-- [ ] Run baseline over the **existing** `folds.json` (do NOT make a new split).
-- [ ] Confirm window→video aggregation + QWK path is shared with the MLP.
-- [ ] (Recommended) Add early stopping on val QWK to the MLP and re-run.
-- [ ] Save baseline metrics to CSV alongside the A5 outputs.
-- [ ] Add/extend a test in `tests/` for the new baseline (project convention +
-      global rule: prove it works).
-- [ ] Capture: exact command(s), data-split description, seed/nondeterminism note.
-
-### Writeup — Part A
-
-- [ ] A1 problem/stakeholder/dataset/target/inputs **+ explicit "native tabular" declaration**
-- [ ] A2 proxy/fallback = N/A, stated
-- [ ] A3 preprocessing + leakage + prediction-time availability
-- [ ] A4 baseline model + settings
-- [ ] A5 neural model + generalization practices (esp. early stopping decision)
-- [ ] A6 embeddings = not appropriate, justified
-- [ ] A7 same target/split/metrics; val-for-selection / test-for-final stated
-- [ ] A8 results table + confusion matrices
-- [ ] A9 practical constraints
-- [ ] A10 one responsible-use concern
-- [ ] A11 recommendation (tabular? neural-over-baseline?)
-
-### Writeup — Part B
-
-- [ ] data readiness · model status · next experiment · staged improvement ·
-      Week-6→final-argument link · charter updates · tabular/embedding/baseline relevance
-
-### Package & submit
-
-- [ ] One `.zip`: code/artifacts + run evidence + this writeup (Part A & Part B labeled).
-- [ ] Cite UTA-RLDD / CVPRW 2019 paper (charter's only license obligation).
-- [ ] Sanity check: no raw video or face crops in the zip (privacy constraint).
-
----
-
-## Decisions to lock before you start
-
-1. **Baseline model:** LightGBM (stronger, interpretable, charter-sanctioned) vs.
-   logistic/ordinal regression (simplest). → _recommend LightGBM._
-2. **Early stopping:** add it now (closes an A5 gap, more honest) vs. defer
-   (less work, note as still-pending). → _recommend add it._
-3. **MLP source:** reuse A5 numbers verbatim vs. re-run for a clean same-session
-   A/B. → _recommend re-run if early stopping changes, else reuse._
+  **directly relevant** (native rep); embeddings = **not relevant** (no categoricals); simpler baselines = **directly relevant** (the whole point).

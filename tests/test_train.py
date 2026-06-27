@@ -56,6 +56,8 @@ def test_run_cross_validation_writes_assignment_artifacts(tmp_path) -> None:
                     "perclos": label / 2,
                     "blink_rate": 10 + subject_idx,
                     "ear_mean": 0.3 - label / 20,
+                    "bright_mean": 100 + label,
+                    "warmth_mean": 1.0 + label / 10,
                 }
             )
     windows_path = tmp_path / "windows.parquet"
@@ -69,6 +71,7 @@ def test_run_cross_validation_writes_assignment_artifacts(tmp_path) -> None:
         validation_subject_count=1,
         epochs=1,
         batch_size=4,
+        early_stopping_patience=-1,
         random_seed=1,
     )
 
@@ -83,8 +86,9 @@ def test_run_cross_validation_writes_assignment_artifacts(tmp_path) -> None:
         "error_by_true_label.csv",
     }
     assert expected_outputs.issubset({path.name for path in output_dir.iterdir()})
-    assert set(results["fold_metrics"]["run"]) == {"baseline", "regularized"}
+    assert set(results["fold_metrics"]["run"]) == {"majority", "perclos", "luminance", "mlp_regularized"}
     assert {
+        "run",
         "train_loss",
         "train_accuracy",
         "train_qwk",
@@ -95,4 +99,35 @@ def test_run_cross_validation_writes_assignment_artifacts(tmp_path) -> None:
         "validation_qwk",
         "validation_rank_mae",
         "validation_macro_f1",
+        "selected_checkpoint",
     }.issubset(results["learning_curves"].columns)
+
+
+def test_train_fold_stops_after_validation_qwk_patience(monkeypatch) -> None:
+    validation_scores = iter([0.1, 0.2, 0.15])
+
+    def fake_train_one_epoch(*_args):
+        return {"loss": 1.0, "accuracy": 0.0, "qwk": 0.0, "rank_mae": 1.0, "macro_f1": 0.0}
+
+    def fake_evaluate_one_epoch(*_args):
+        score = next(validation_scores)
+        return {"loss": 1.0 - score, "accuracy": score, "qwk": score, "rank_mae": 1.0, "macro_f1": score}
+
+    monkeypatch.setattr(train, "train_one_epoch", fake_train_one_epoch)
+    monkeypatch.setattr(train, "evaluate_one_epoch", fake_evaluate_one_epoch)
+    fold_data = {
+        "feature_columns": ["perclos", "blink_rate"],
+        "train": {"x": np.array([[0.0, 1.0], [1.0, 0.0]]), "y": np.array([0, 1])},
+        "validation": {"x": np.array([[0.5, 0.5]]), "y": np.array([1])},
+        "test": {"x": np.array([[0.2, 0.8]]), "y": np.array([0])},
+    }
+
+    result = train.train_fold(
+        fold_data,
+        model_config={"hidden_dims": (4,), "dropout": 0.0, "num_classes": 3},
+        training_config={"epochs": 5, "batch_size": 2, "early_stopping_patience": 1},
+    )
+
+    assert result["best_epoch"] == 2
+    assert len(result["history"]) == 3
+    assert result["stopped_early"] is True

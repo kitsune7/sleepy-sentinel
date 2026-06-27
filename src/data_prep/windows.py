@@ -119,6 +119,10 @@ def summarize_window(window_df: pd.DataFrame, fps: float) -> dict[str, Any]:
         "frac_head_down": float((window_df["pitch"] > HEAD_DOWN_PITCH_DEG).mean()),
         "yaw_std": float(window_df["yaw"].std()),
         "roll_std": float(window_df["roll"].std()),
+        "bright_mean": float(window_df["bright_mean"].mean()),
+        "bright_std": float(window_df["bright_mean"].std()),
+        "warmth_mean": float(window_df["warmth"].mean()),
+        "warmth_std": float(window_df["warmth"].std()),
         "frac_face_missing": float((window_df["face"] == 0).mean()),
     }
 
