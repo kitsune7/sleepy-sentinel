@@ -1,8 +1,7 @@
 # Alertness Classifier — Build Specification
 
 A complete, self-contained spec for building a subject-independent, ordinal
-3-class alertness classifier from per-subject video. An engineer or coding agent
-should be able to implement the whole pipeline from this document alone.
+3-class alertness classifier from per-subject video.
 
 ---
 
@@ -263,29 +262,7 @@ its confusion-matrix errors should concentrate on the diagonal/off-by-one cells.
 
 ---
 
-## 12. Repository layout
-
-```
-alertness/
-  src/
-    data_prep/
-      extract_features.py      # Stage 1 (provided)
-      windows.py               # Stage 2: per-frame CSV -> windows.parquet
-    training/
-      dataset.py               # Stage 3: encode + per-subject norm + scaler
-      splits.py                # Stage 4: GroupKFold / LOSO / fixed holdout
-      models.py                # Stage 5: MLP+CORN, MLP+CE, optional LightGBM
-      train.py                 # Stage 5-6: CV loop, early stopping, aggregation
-      baselines.py             # Stage 8: majority, luminance-only, PERCLOS-only
-    evaluation/
-      metrics.py               # Stage 7: QWK, MAE, confusion matrix
-  face_landmarker.task         # downloaded model bundle
-  config.yaml                  # all params (window sizes, lr, seeds, fold count)
-  data/                        # raw videos (can live on external storage)
-  features/                    # per-frame CSVs from Stage 1
-```
-
-## 13. Build order
+## 12. Build order
 
 1. Run `data_prep.extract_features` over the dataset → `features/`.
 2. `data_prep.windows` → `windows.parquet`.
@@ -295,14 +272,7 @@ alertness/
    subject-wise CV, aggregating windows → video.
 6. `evaluation.metrics` — report mean ± std across folds vs. the baselines.
 
-## 14. Dependencies
-
-```
-mediapipe  opencv-python  numpy  pandas  pyarrow
-scikit-learn  torch  coral-pytorch  lightgbm   pyyaml
-```
-
-## 15. Reproducibility
+## 13. Reproducibility
 
 Fix and log seeds for `random`, `numpy`, and `torch`; record fold assignments
 (subject→fold) to disk so every run is reproducible. Pin package versions in a
