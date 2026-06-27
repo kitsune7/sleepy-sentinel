@@ -1,7 +1,38 @@
 # Alertness Classifier — Build Specification
 
 A complete, self-contained spec for building a subject-independent, ordinal
-3-class alertness classifier from per-subject video.
+3-class alertness classifier from per-subject video. This document describes the
+intended design **and** the current project state as of Assignment 6 (June 2026).
+
+---
+
+## 0. Current project status
+
+| Stage | Component | Status |
+|-------|-----------|--------|
+| 1 | Per-frame feature extraction (`data_prep.extract_features`) | **Done** |
+| 2 | Windowing + summary features (`data_prep.windows` → `data/frame_windows.parquet`) | **Done** |
+| 3 | Per-subject EAR norm + train-only scaler (`training.dataset`) | **Done** |
+| 4 | Subject-wise CV splits (`training.splits`, saved to `outputs/folds.json`) | **Done** — **LOSO is the primary evaluation** |
+| 5 | Neural model training (`training.train`, `training.models`) | **Done** — cross-entropy MLP only; CORN head **not yet wired** |
+| 6 | Window→video aggregation + metrics | **Done** |
+| 7 | Evaluation metrics (`evaluation.metrics`) | **Done** |
+| 8 | Baselines (`training.baselines`) | **Done** — majority, luminance-only, PERCLOS-only |
+
+**Current best candidate:** PERCLOS-only logistic regression (QWK 0.410 under LOSO).
+The regularized cross-entropy MLP does not beat it and has not earned its extra
+complexity.
+
+**Primary evaluation:** Leave-One-Subject-Out (60 folds, 180 held-out videos).
+Assignment 5 used 5-fold GroupKFold as an intermediate step; LOSO is the
+gold-standard estimate going forward.
+
+**Run the full pipeline:**
+
+```bash
+uv run train_alertness                          # writes to outputs/
+uv run train_alertness --wandb-project sleepy-sentinel   # optional W&B logging
+```
 
 ---
 
@@ -26,6 +57,9 @@ model is trained on the summaries. This sidesteps lighting/appearance confounds
 (a warm or dim room can't leak into a geometric feature) and shrinks ~111 GB of
 video to a few hundred MB of text.
 
+**Stakeholder context:** personal early-fatigue aid for self-monitoring — not a
+clinical, employer, or safety-critical system.
+
 ---
 
 ## 2. Dataset
@@ -37,7 +71,11 @@ video to a few hundred MB of text.
   landmarks are normalized and blendshapes are scale-invariant.
 - **Balance is automatic**: every subject contributes exactly one video per
   class, so any subject-wise split is class-balanced. No stratification by class
-  and no class weighting are required.
+  is required for the MLP; baselines use `class_weight="balanced"` in logistic
+  regression as a minor safeguard.
+- Each video contributes roughly 50–116 windows depending on frame availability.
+- **Citation:** Ghoddoosian, Galib, and Athitsos, "A Realistic Dataset and
+  Baseline Temporal Model for Early Drowsiness Detection," CVPR Workshops 2019.
 
 ---
 
@@ -53,15 +91,16 @@ video to a few hundred MB of text.
       --[Stage 7: metrics]  vs  [Stage 8: baselines]
 ```
 
+All stages are implemented. Stage 5 currently trains a cross-entropy MLP; the
+CORN ordinal head remains planned (see §15).
+
 ---
 
 ## 4. Stage 1 — Per-frame extraction
 
-Implemented by the accompanying `extract_features.py` (provided). It streams
-each video frame by frame (RAM bounded by a single frame), runs MediaPipe
-FaceLandmarker with blendshapes + transformation matrix enabled, and writes one
-small CSV per video. It can run on a single video and optionally delete the
-source afterward, so the full dataset never needs to be on disk at once.
+Implemented by `data_prep.extract_features`. It streams each video frame by
+frame (RAM bounded by a single frame), runs MediaPipe FaceLandmarker with
+blendshapes + transformation matrix enabled, and writes one small CSV per video.
 
 **Per-frame CSV columns:**
 
@@ -119,17 +158,21 @@ Slide a fixed window over each video's per-frame CSV.
 | `pitch_mean`, `pitch_std`, `pitch_range` | head pitch (nodding) |
 | `frac_head_down` | fraction of frames with pitch beyond a downward threshold |
 | `yaw_std`, `roll_std` | head stability |
-| `frac_face_missing` | data-quality covariate (recorded; **not** fed to the model) |
+| `frac_face_missing` | data-quality covariate (recorded; **not** fed to the MLP) |
 
-**Output of Stage 2:** a single table `windows.parquet` with columns =
-the summary features above + `subject_id` + `label` + `window_idx` + `video_id`.
+Luminance columns (`bright_mean`, `bright_std`, `warmth_mean`, `warmth_std`,
+`warmth`) may appear in the window table when present in the frame CSVs; they
+are used **only** by the luminance-only baseline, not by the MLP.
+
+**Output of Stage 2:** `data/frame_windows.parquet` with the summary features
+above + `subject_id` + `label` + `window_idx` + `video_id`.
 
 ---
 
 ## 6. Stage 3 — Encoding and normalization
 
-**Labels:** integer ordinal `y ∈ {0,1,2}`. No one-hot. The CORN loss derives its
-own extended-binary targets from the integer label.
+**Labels:** integer ordinal `y ∈ {0,1,2}`. No one-hot. The CORN loss (when
+implemented) derives its own extended-binary targets from the integer label.
 
 **Per-subject normalization (leakage-safe):** baseline EAR differs by face, so
 compute each subject's normalization stats from *that subject's own frames
@@ -141,7 +184,14 @@ alert video as a baseline — that wouldn't exist at deployment time.
 
 **Global feature scaling:** after per-subject normalization, fit a
 `StandardScaler` **on the training fold only** and apply it to val/test. This is
-the one normalization that must respect the train/test boundary.
+the one normalization that must respect the train/test boundary. Implemented in
+`dataset.prepare_fold_datasets`. Simple baselines (majority, luminance, PERCLOS)
+fit their own per-fold imputer/scaler on their narrow feature slices and do not
+use the MLP's full-feature scaling path.
+
+**Categorical embeddings:** not appropriate. All model inputs are continuous
+numeric summaries. Embedding subject identity would be leakage; inventing
+categorical tokens would add features not available at inference.
 
 ---
 
@@ -152,36 +202,67 @@ Windows from one person are highly correlated; if any of a subject's windows
 appear in both train and test, the model learns to recognize the face and test
 scores become meaningless.
 
-**Primary: subject-wise cross-validation.** Use `GroupKFold` (groups =
-`subject_id`). Because the models are tiny and train in seconds on summary
-features, prefer one of:
-- **5-fold** (12 held-out subjects per fold), or
-- **Leave-One-Subject-Out (LOSO)** (60 folds) for the gold-standard estimate
-  drowsiness papers report.
+**Primary (current): Leave-One-Subject-Out (LOSO).** 60 folds, one held-out
+subject (3 videos) per fold. This is the gold-standard estimate and the basis
+for all Assignment 6 results. Each LOSO test fold has only three videos, so
+fold-level metrics are very quantized; pooled 180-video summaries and summed
+confusion matrices are useful interpretation aids alongside mean ± std.
 
-Within each training fold, carve out a few subjects (also by group) as a
-validation set for early stopping. Report every metric as **mean ± std across
-folds** — the std is the headline measure of stability with only 60 subjects.
+**Secondary (historical): 5-fold GroupKFold.** Used in Assignment 5
+(12 held-out subjects per fold). Still available via `--n-splits 5`. Useful for
+faster iteration but less strict than LOSO.
+
+Within each training fold, carve out **9 subjects** (by group) as a validation
+set for early stopping and checkpoint selection. Report every metric as **mean ±
+std across folds** — the std is the headline measure of stability with only 60
+subjects.
 
 **Optional fixed holdout** for a single clean final number: 42 train / 9 val /
-9 test subjects (seeded). Touch the test split exactly once. Note that with only
-9 test subjects this number is high-variance; CV is the trustworthy estimate.
+9 test subjects (seeded). Touch the test split exactly once. Not yet run; with
+only 9 test subjects this number is high-variance — CV is the trustworthy
+estimate.
 
-**Invariant to enforce in code:** assert that the intersection of `subject_id`
-sets across train/val/test is empty in every fold.
+**Invariant enforced in code:** `splits.assert_disjoint_subjects` asserts that
+train/val/test `subject_id` sets are disjoint in every fold. Fold assignments
+are saved to `outputs/folds.json`.
 
 ---
 
 ## 8. Stage 5 — Model, loss, training
 
-**Model (primary): small MLP with a CORN head.**
-- Input: the ~17 summary features (drop `frac_face_missing`).
-- Body: 2 hidden layers (e.g., 64 → 32), ReLU, dropout ≈ 0.3, optional batchnorm.
-- Output: `K-1 = 2` logits (CORN reformulates 3-class ordinal as two cumulative
-  binary questions: "past alert?" and "past low-vigilant?", with rank-consistent
-  predictions).
+### Implemented: regularized cross-entropy MLP
 
-**Loss (primary): CORN loss** from `coral_pytorch`:
+This is the model currently trained by `uv run train_alertness`.
+
+- **Architecture:** input ~17 summary features (all columns except IDs, label,
+  and `frac_face_missing`) → hidden `(64, 32)` → ReLU → dropout 0.25 → 3-way
+  softmax logits.
+- **Loss:** plain cross-entropy.
+- **Optimizer:** Adam (lr 1e-3, weight_decay 1e-4).
+- **Batch size:** 64.
+- **Early stopping:** validation QWK, patience 8 (default). Disabled with
+  `--early-stopping-patience -1`.
+- **Max epochs:** 40 (default; was 100 in Assignment 5 before early stopping
+  was added).
+- **Seeds:** fixed at 42 by default; per-fold seed offset for training.
+
+**Assignment 5 finding (5-fold, fixed 100 epochs):** dropout 0.25 + weight
+decay 1e-4 improved QWK from 0.279 ± 0.145 to 0.400 ± 0.158, but train/val
+learning curves showed clear overfitting — validation loss climbed while
+training loss kept falling.
+
+**Assignment 6 finding (LOSO, early stopping):** early stopping fired in 58/60
+folds; best epoch mean 6.0, median 4.0. This confirmed that fixed long training
+was overfitting. Under LOSO the regularized MLP scores QWK 0.363 ± 0.382 — below
+PERCLOS-only (0.410 ± 0.414).
+
+### Planned: CORN ordinal head
+
+The original primary design — not yet implemented in the training loop:
+
+- Same MLP body, but output `K-1 = 2` logits (CORN reformulates 3-class ordinal
+  as two cumulative binary questions).
+- **Loss:** CORN loss from `coral_pytorch`:
 
 ```python
 from coral_pytorch.losses import corn_loss
@@ -189,36 +270,37 @@ from coral_pytorch.dataset import corn_label_from_logits
 
 # logits: (batch, K-1=2); y: (batch,) integer labels in {0,1,2}
 loss = corn_loss(logits, y, num_classes=3)
-# inference:
 pred_rank = corn_label_from_logits(logits)   # -> {0,1,2}
 ```
 
-**Training:** Adam (lr 1e-3, weight_decay 1e-4), batch size 64, max ~200 epochs,
-early stopping on **validation QWK** (patience ~20). No class weights (balanced).
-Set and log all seeds (`numpy`, `torch`, Python `random`).
+`models.build_ordinal_mlp` exists as a stub but is not wired into
+`training.train`. The CORN vs. cross-entropy A/B remains an open experiment (§15).
 
-**Required baseline-to-beat model:** the same MLP with a 3-way softmax head and
-plain cross-entropy. With only 3 classes the ordinal loss's edge is often small,
-so A/B CORN vs. cross-entropy and report both — do not assume CORN wins.
+### Planned: alternative tabular models
 
-**Alternative model (optional comparison):** gradient boosting (LightGBM). To
-keep it ordinal, use the CORN/CORAL decomposition — train two cumulative binary
-classifiers, `P(y>0)` and `P(y>1)` — rather than a plain multiclass objective.
+- **Full-feature logistic / ordinal regression** — interpretable test of whether
+  the ~17 features add signal beyond PERCLOS alone.
+- **Shallow tree model** (e.g. LightGBM with CORAL-decomposed cumulative
+  binary classifiers) — optional comparison if simpler models don't win.
 
 ---
 
 ## 9. Stage 6 — Inference and window→video aggregation
 
-Train on windows; evaluate on **videos** (the real unit of interest) and report
-subject-level too.
+Train on windows; evaluate on **videos** (the real unit of interest).
 
-1. Predict each window: from CORN, take the per-window cumulative probabilities
-   `P(y>0)`, `P(y>1)`.
-2. Aggregate a video's windows by **averaging those cumulative probabilities**
-   across the video's windows, then apply the CORN decision rule (count how many
-   averaged cumulative probs exceed 0.5) to get the video's predicted rank.
-3. There are 180 videos total → metrics are computed over the held-out videos in
-   each fold, then averaged across folds.
+**Current implementation:**
+1. Predict each window: softmax probabilities for classes `{0,1,2}`.
+2. Aggregate a video's windows by **averaging class probabilities** across
+   windows, then take the argmax for the video-level prediction.
+3. Metrics computed over held-out videos in each fold, then averaged across folds.
+
+**Planned for CORN:** average cumulative probabilities `P(y>0)`, `P(y>1)` across
+windows, then apply the CORN decision rule (count how many averaged cumulative
+probs exceed 0.5).
+
+All models and baselines share the same aggregation path in
+`train.aggregate_window_predictions`, so comparisons stay fair.
 
 ---
 
@@ -239,41 +321,194 @@ Secondary (report but don't optimize): macro-F1, accuracy, Spearman correlation.
 
 **Reporting format:** every metric as **mean ± std across CV folds**, at the
 **video level**. Include the aggregated confusion matrix summed over folds.
+Additional diagnostic outputs: `confidence_by_correctness.csv`,
+`error_by_true_label.csv`, per-fold confusion matrices, learning curves (MLP).
 
 ---
 
 ## 11. Stage 8 — Baselines
 
-The model's numbers are only meaningful against floors:
+Implemented in `training.baselines`. All use the same LOSO folds, window→video
+aggregation, and video-level metrics as the MLP.
 
-1. **Majority class** — always predict the most frequent class. Accuracy ≈ 33%,
-   QWK ≈ 0. Sanity floor.
-2. **Luminance-only (confound check)** — per-video mean of `bright_mean` and
-   `warmth`; fit logistic/ordinal regression on just those two, same subject-wise
-   CV. **If the real model doesn't clearly beat this, lighting is leaking** and
-   the model is partly a brightness detector, not an alertness detector.
-3. **PERCLOS-only** — a one-feature threshold/ordinal model on `perclos` alone.
-   A strong, interpretable reference; the full model should beat it to justify
-   the extra features.
+| Baseline | Implementation | Purpose |
+|----------|----------------|---------|
+| **Majority class** | always predict training majority | sanity floor |
+| **Luminance-only** | logistic regression on available luminance columns | confound check — is the signal just brightness? |
+| **PERCLOS-only** | logistic regression on `perclos` alone | interpretable task-specific reference |
 
-**Acceptance criteria:** the chosen model must beat majority and luminance-only
-by a clear margin on QWK (mean across folds, with non-overlapping std bands), and
-its confusion-matrix errors should concentrate on the diagonal/off-by-one cells.
+Logistic baselines use median imputation + StandardScaler + balanced class
+weights, fit per fold on training rows only.
+
+**Confound check result (Assignment 6):** luminance-only is near chance (QWK
+0.048 ± 0.502, accuracy 0.361 ± 0.248). The current signal is probably not
+*just* brightness, though lighting can still interact with face/eye tracking
+quality.
+
+**Acceptance criteria (updated with evidence):**
+- Beat majority and luminance-only by a clear margin → **met** by PERCLOS and MLP.
+- Beat PERCLOS-only to justify the full feature set → **not met** by the MLP.
+- Confusion-matrix errors concentrate on diagonal/off-by-one, not alert↔drowsy
+  corners → **partially met** (24/180 off-by-two for PERCLOS and MLP vs. 50/180
+  for majority).
+
+By the charter's **simpler-and-equal rule**, PERCLOS-only is the current
+recommended candidate until a richer model clearly improves QWK/rank-MAE and the
+alert↔drowsy off-by-two corners.
 
 ---
 
-## 12. Build order
+## 12. Results to date
 
-1. Run `data_prep.extract_features` over the dataset → `features/`.
-2. `data_prep.windows` → `windows.parquet`.
-3. `training.dataset` (per-subject norm + train-only scaler) and `training.splits`.
-4. `baselines.py` — establish the floors first.
-5. `training.models` + `training.train` — CORN model and the cross-entropy baseline, under
-   subject-wise CV, aggregating windows → video.
-6. `evaluation.metrics` — report mean ± std across folds vs. the baselines.
+### Assignment 5 — 5-fold GroupKFold, cross-entropy MLP, fixed 100 epochs
 
-## 13. Reproducibility
+| Model | QWK (mean±std) | rank-MAE (mean±std) | Accuracy (mean±std) | macro-F1 (mean±std) |
+|-------|----------------|---------------------|---------------------|---------------------|
+| MLP baseline (no reg) | 0.279 ± 0.145 | 0.694 ± 0.119 | 0.433 ± 0.061 | 0.428 ± 0.068 |
+| MLP regularized (dropout 0.25 + wd 1e-4) | **0.400 ± 0.158** | **0.611 ± 0.124** | **0.489 ± 0.082** | **0.483 ± 0.082** |
+
+Key learnings: regularization helped but fold bands overlap heavily; learning
+curves showed train/val divergence → early stopping needed. Luminance and
+PERCLOS baselines were not yet implemented.
+
+### Assignment 6 — LOSO, baselines + regularized MLP with early stopping
+
+| Model | QWK (mean±std) | rank-MAE (mean±std) | Accuracy (mean±std) | macro-F1 (mean±std) | Notes |
+|-------|----------------|---------------------|---------------------|---------------------|-------|
+| Majority | 0.000 ± 0.000 | 0.944 ± 0.125 | 0.333 ± 0.000 | 0.167 ± 0.000 | sanity floor |
+| Luminance-only | 0.048 ± 0.502 | 0.844 ± 0.400 | 0.361 ± 0.248 | 0.258 ± 0.244 | near chance |
+| **PERCLOS-only** | **0.410 ± 0.414** | **0.617 ± 0.357** | **0.517 ± 0.241** | **0.405 ± 0.272** | **current best** |
+| MLP regularized | 0.363 ± 0.382 | 0.650 ± 0.339 | 0.483 ± 0.233 | 0.370 ± 0.254 | does not beat PERCLOS |
+
+Pooled across 180 held-out videos: PERCLOS QWK 0.409 / accuracy 0.517; MLP QWK
+0.353 / accuracy 0.483. Both reduce alert↔drowsy off-by-two errors to 24/180
+(vs. 37/180 luminance, 50/180 majority).
+
+Summed-over-folds confusion matrices (rows = true, columns = predicted):
+
+```
+PERCLOS-only                      MLP regularized
+         pred a  l  d                      pred a  l  d
+true alert   48  7  5             true alert   36 13 11
+true low     32 14 14             true low     25 18 17
+true drowsy  19 10 31             true drowsy  13 14 33
+```
+
+**Error-pattern notes:**
+- PERCLOS is much better on true alert videos (48/60 vs. 36/60).
+- MLP is slightly better on true drowsy videos (33/60 vs. 31/60).
+- Both struggle with the low-vigilant middle class (expected for an ordinal midpoint).
+- Confidence is weakly informative: MLP mean confidence 0.480 on correct vs.
+  0.435 on incorrect; PERCLOS 0.449 vs. 0.410. Not sufficient for a high-stakes
+  automated warning threshold without calibration.
+
+**Practical recommendation:** tabular approach is validated; neural model is not
+yet justified over PERCLOS-only. PERCLOS is transparent, cheap, easy to monitor,
+and easier to explain.
+
+---
+
+## 13. Build order and implementation map
+
+| Step | Module | Status |
+|------|--------|--------|
+| 1. Extract features | `data_prep.extract_features` | Done |
+| 2. Build windows | `data_prep.windows` → `data/frame_windows.parquet` | Done |
+| 3. Dataset + splits | `training.dataset`, `training.splits` | Done |
+| 4. Baselines | `training.baselines` | Done |
+| 5. Neural model + training | `training.models`, `training.train` | Done (cross-entropy only) |
+| 6. Metrics | `evaluation.metrics` | Done |
+| 7. CORN ordinal head | `training.models` + `training.train` | **Not started** |
+| 8. Full-feature interpretable model | extend `training.baselines` or new module | **Not started** |
+| 9. LightGBM comparison | new module | **Not started** (optional) |
+| 10. Confidence calibration | post-hoc on saved predictions | **Not started** |
+| 11. Subgroup error analysis | slice `error_by_true_label.csv` by covariates | **Not started** |
+
+---
+
+## 14. Open experiments and model-choice criteria
+
+These are the remaining experiments before a final model recommendation. Scope
+boundary: one focused comparison, not a model tournament.
+
+### Priority 1 — Full-feature interpretable model vs. PERCLOS
+
+Test whether the full ~17-feature set beats PERCLOS with a simpler interpretable
+tabular model (logistic/ordinal regression or a shallow tree), using the exact
+same LOSO folds and aggregation. **If it cannot beat PERCLOS, keep PERCLOS.**
+
+### Priority 2 — CORN ordinal head vs. cross-entropy MLP
+
+Wire up `build_ordinal_mlp` + CORN loss and compare against the regularized
+cross-entropy MLP and PERCLOS-only. Require a real gain on QWK, rank-MAE, and
+the alert↔drowsy off-by-two corners — a higher mean alone is not enough if fold
+bands remain this wide.
+
+### Priority 3 — Confidence calibration
+
+Temperature scaling or reliability-diagram analysis on saved predictions.
+Possibly evaluate CORN cumulative probabilities as a confidence signal. Needed
+before any confidence threshold could drive a warning.
+
+### Priority 4 — Subgroup robustness (if feasible)
+
+Break out errors by glasses, facial hair, gender, or other available covariates
+where sample size permits. UTA-RLDD has limited diversity (51M/9F; skewed
+ethnicity); a face/eye-based model may behave differently across groups even
+when those attributes are not explicit features.
+
+### Optional — LightGBM with CORAL decomposition
+
+Gradient boosting with two cumulative binary classifiers (`P(y>0)`, `P(y>1)`)
+as an alternative tabular model if simpler options don't win.
+
+### Model-choice bar (unchanged from charter)
+
+A richer model must **clearly** beat PERCLOS on QWK/rank-MAE **and** reduce
+dangerous off-by-two errors, with tighter fold bands — not just a higher mean
+with overlapping std. If statistically indistinguishable, **simpler wins**.
+
+---
+
+## 15. Reproducibility
 
 Fix and log seeds for `random`, `numpy`, and `torch`; record fold assignments
-(subject→fold) to disk so every run is reproducible. Pin package versions in a
-lockfile.
+to `outputs/folds.json` so every run is reproducible. Pin package versions in
+`uv.lock`.
+
+**Default CLI parameters** (`uv run train_alertness`):
+
+| Flag | Default |
+|------|---------|
+| `windows_path` | `data/frame_windows.parquet` |
+| `output_dir` | `outputs` |
+| `--epochs` | 40 |
+| `--batch-size` | 64 |
+| `--random-seed` | 42 |
+| `--learning-rate` | 1e-3 |
+| `--n-splits` | `None` (LOSO) |
+| `--validation-subject-count` | 9 |
+| `--early-stopping-patience` | 8 |
+
+PyTorch training can still have small hardware/library nondeterminism; saved
+CSVs in `outputs/` are the run evidence for writeups.
+
+**Output artifacts:** `metric_summary.csv`, `fold_metrics.csv`,
+`video_predictions.csv`, `learning_curves.csv`, `split_summaries.csv`,
+`confidence_by_correctness.csv`, `error_by_true_label.csv`, per-fold confusion
+matrices.
+
+---
+
+## 16. Responsible-use limitations
+
+- **Not safety-critical.** Personal awareness aid only.
+- **Proxy-variable / lighting confound:** partly tested — luminance baseline near
+  chance, but lighting can still interact with tracking quality.
+- **Fairness and representativeness:** 60 subjects, limited demographic diversity.
+  Subgroup error rates may differ; re-validate on the target user before any
+  deployment.
+- **Automation bias:** confidence gaps between correct and incorrect predictions
+  are small (~0.04–0.05). Raw softmax/logistic confidence is not yet a
+  trustworthy gate.
+- **Privacy:** raw video stays local; only aggregate features/metrics are shared.
