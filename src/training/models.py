@@ -2,7 +2,6 @@
 
 This file owns the model definitions for Stage 5:
 - create a simple MLP that predicts the three alertness classes
-- optionally create an ordinal/CORN-style variant later
 - keep model architecture choices small and easy to compare
 - expose prediction helpers used by training and evaluation
 
@@ -25,16 +24,6 @@ def build_cross_entropy_mlp(
 ) -> Any:
     """Create the main 3-class MLP baseline."""
     return _build_mlp(input_dim=input_dim, hidden_dims=hidden_dims, dropout=dropout, output_dim=num_classes)
-
-
-def build_ordinal_mlp(
-    input_dim: int,
-    hidden_dims: tuple[int, ...],
-    dropout: float,
-    num_classes: int,
-) -> Any:
-    """Create an ordinal model variant."""
-    return _build_mlp(input_dim=input_dim, hidden_dims=hidden_dims, dropout=dropout, output_dim=num_classes - 1)
 
 
 def predict_logits(model: Any, batch: Any) -> Any:

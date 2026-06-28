@@ -15,13 +15,6 @@ def test_build_cross_entropy_mlp_returns_torch_module_with_three_logits() -> Non
     assert any(isinstance(module, torch.nn.Dropout) for module in model.modules())
 
 
-def test_build_ordinal_mlp_returns_k_minus_one_logits() -> None:
-    model = models.build_ordinal_mlp(input_dim=4, hidden_dims=(8,), dropout=0.0, num_classes=3)
-
-    logits = model(torch.zeros((2, 4), dtype=torch.float32))
-    assert logits.shape == (2, 2)
-
-
 def test_prediction_helpers_return_logits_probabilities_and_labels() -> None:
     class FixedModel(torch.nn.Module):
         def forward(self, batch: torch.Tensor) -> torch.Tensor:
