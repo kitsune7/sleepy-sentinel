@@ -14,8 +14,9 @@ this module should only turn already-split DataFrames into model-ready objects.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypedDict
 
+import numpy as np
 import pandas as pd
 import torch
 from sklearn.impute import SimpleImputer
@@ -24,6 +25,28 @@ from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, TensorDataset
 
 NON_FEATURE_COLUMNS = {"subject_id", "video_id", "window_idx", "label", "frac_face_missing"}
+
+
+class SplitArrays(TypedDict):
+    """One split's model-ready arrays plus the metadata used for diagnostics."""
+
+    x: np.ndarray
+    y: np.ndarray
+    metadata: pd.DataFrame
+
+
+class FoldDatasets(TypedDict):
+    """Prepared train/validation/test arrays for one fold.
+
+    The preprocessor stays `Any` on purpose: it is a fitted sklearn Pipeline and
+    typing its internals buys nothing here.
+    """
+
+    train: SplitArrays
+    validation: SplitArrays
+    test: SplitArrays
+    feature_columns: list[str]
+    preprocessor: Any
 
 
 def get_feature_columns(windows_df: pd.DataFrame) -> list[str]:
@@ -56,7 +79,7 @@ def prepare_fold_datasets(
     train_df: pd.DataFrame,
     validation_df: pd.DataFrame,
     test_df: pd.DataFrame,
-) -> dict[str, Any]:
+) -> FoldDatasets:
     """Create model-ready train, validation, and test objects for one fold."""
     feature_columns = get_feature_columns(train_df)
     train_x, _ = split_features_and_target(train_df, feature_columns)
@@ -71,9 +94,9 @@ def prepare_fold_datasets(
     }
 
 
-def make_dataloaders(fold_datasets: dict[str, Any], batch_size: int) -> dict[str, Any]:
+def make_dataloaders(fold_datasets: FoldDatasets, batch_size: int) -> dict[str, DataLoader]:
     """Create PyTorch dataloaders from prepared fold datasets."""
-    dataloaders = {}
+    dataloaders: dict[str, DataLoader] = {}
 
     for split_name in ["train", "validation", "test"]:
         split = fold_datasets[split_name]
@@ -88,7 +111,7 @@ def make_dataloaders(fold_datasets: dict[str, Any], batch_size: int) -> dict[str
     return dataloaders
 
 
-def _prepare_split(split_df: pd.DataFrame, feature_columns: list[str], preprocessor: Any) -> dict[str, Any]:
+def _prepare_split(split_df: pd.DataFrame, feature_columns: list[str], preprocessor: Any) -> SplitArrays:
     features, target = split_features_and_target(split_df, feature_columns)
     metadata_columns = [col for col in split_df.columns if col not in feature_columns]
 

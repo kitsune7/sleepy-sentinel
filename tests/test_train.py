@@ -8,6 +8,7 @@ import pytest
 import torch
 
 from training import train
+from training.config import ModelConfig, TrainingConfig
 
 
 def test_set_random_seeds_makes_python_numpy_and_torch_reproducible() -> None:
@@ -73,19 +74,23 @@ def test_run_cross_validation_writes_assignment_artifacts(tmp_path) -> None:
         batch_size=4,
         early_stopping_patience=-1,
         random_seed=1,
+        include_mlp=True,
     )
 
     expected_outputs = {
+        "manifest.json",
         "folds.json",
         "split_summaries.csv",
         "learning_curves.csv",
         "video_predictions.csv",
         "fold_metrics.csv",
         "metric_summary.csv",
-        "confidence_by_correctness.csv",
-        "error_by_true_label.csv",
+        "confusion_matrices.csv",
+        "diagnostics.csv",
     }
-    assert expected_outputs.issubset({path.name for path in output_dir.iterdir()})
+    output_names = {path.name for path in output_dir.iterdir()}
+    assert expected_outputs.issubset(output_names)
+    assert not any(name.endswith("_confusion_matrix.csv") for name in output_names)
     assert set(results["fold_metrics"]["run"]) == {"majority", "perclos", "luminance", "mlp_regularized"}
     assert {
         "run",
@@ -124,8 +129,8 @@ def test_train_fold_stops_after_validation_qwk_patience(monkeypatch) -> None:
 
     result = train.train_fold(
         fold_data,
-        model_config={"hidden_dims": (4,), "dropout": 0.0, "num_classes": 3},
-        training_config={"epochs": 5, "batch_size": 2, "early_stopping_patience": 1},
+        ModelConfig(hidden_dims=(4,), dropout=0.0, weight_decay=0.0, num_classes=3),
+        TrainingConfig(epochs=5, batch_size=2, early_stopping_patience=1),
     )
 
     assert result["best_epoch"] == 2

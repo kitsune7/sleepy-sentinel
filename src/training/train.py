@@ -4,36 +4,56 @@ This file owns the Stage 5 and Stage 6 orchestration:
 - load the window-level dataset
 - ask `training.splits` for subject-wise CV folds
 - ask `training.dataset` to prepare fold-specific train/validation/test objects
-- train one baseline model and one focused generalization intervention
-- track training and validation metrics over epochs
+- run the diagnostic baselines and, on request, one regularized MLP
 - aggregate window predictions up to video-level predictions
-- save fold metrics, confusion matrices, and traces for the writeup
+- hand structured results to `training.artifacts` for writing
 
-Keep this file as the coordinator. Feature engineering belongs in
-`data_prep.windows`, split logic in `training.splits`, preprocessing in
-`training.dataset`, and metric math in `evaluation.metrics`.
+Separation of concerns:
+- feature engineering -> `data_prep.windows`
+- split logic -> `training.splits`
+- preprocessing -> `training.dataset`
+- metric math -> `evaluation.metrics`
+- experiment tracking -> `training.tracking` (never `wandb.*` directly here)
+- output writing -> `training.artifacts`
+
+Output layout: results are written FLAT into the provided `output_dir` (default
+`outputs/`). We deliberately do NOT split into `outputs/latest/` plus
+`outputs/runs/<id>/`; a single directory per command is simpler to diff and
+reason about, and run identity lives in `manifest.json`.
 """
 
 from __future__ import annotations
 
 import argparse
 import copy
+import logging
 import math
 import random
+import subprocess
+from datetime import datetime, timezone
+from importlib import metadata as importlib_metadata
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pandas as pd
 import torch
+from torch.utils.data import DataLoader
 
 from evaluation import metrics
-from training import baselines, dataset, models, splits
+from training import artifacts, baselines, dataset, models, splits, tracking
+from training.config import (
+    CrossValidationConfig,
+    ModelConfig,
+    RunResult,
+    TrainingConfig,
+)
+from training.dataset import FoldDatasets
+from training.tracking import NullTracker, Tracker
 
-try:
-    import wandb
-except ImportError:  # pragma: no cover - dependency is optional unless W&B is enabled
-    wandb = None
+logger = logging.getLogger("training.train")
+
+MLP_RUN_NAME = "mlp_regularized"
+HEADLINE_RUNS = ("perclos", MLP_RUN_NAME)
 
 
 def main() -> None:
@@ -53,13 +73,33 @@ def main() -> None:
         default=8,
         help="Validation-QWK patience; negative disables.",
     )
-    parser.add_argument("--wandb-project", type=str, default=None, help="Enable W&B logging for each model/fold run.")
+    parser.add_argument("--include-mlp", action="store_true", help="Train the regularized MLP run as well.")
+    parser.add_argument("--verbose", action="store_true", help="Log fold-by-fold progress.")
+    parser.add_argument("--wandb-project", type=str, default=None, help="Enable W&B logging for the CV experiment.")
     parser.add_argument("--wandb-entity", type=str, default=None, help="Optional W&B team or username.")
     parser.add_argument("--wandb-mode", choices=["online", "offline", "disabled"], default=None)
     parser.add_argument("--wandb-group", type=str, default=None, help="Optional W&B group name for the CV run.")
+    parser.add_argument(
+        "--wandb-per-fold-runs",
+        action="store_true",
+        help="Restore one separate W&B run per fold (default: one run for the whole command).",
+    )
     args = parser.parse_args()
 
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(message)s",
+    )
+
     set_random_seeds(args.random_seed)
+
+    tracker = tracking.build_tracker(
+        project=args.wandb_project,
+        entity=args.wandb_entity,
+        mode=args.wandb_mode,
+        group=args.wandb_group,
+        per_fold_runs=args.wandb_per_fold_runs,
+    )
 
     run_cross_validation(
         args.windows_path,
@@ -71,12 +111,9 @@ def main() -> None:
         learning_rate=args.learning_rate,
         early_stopping_patience=args.early_stopping_patience,
         random_seed=args.random_seed,
-        wandb_project=args.wandb_project,
-        wandb_entity=args.wandb_entity,
-        wandb_mode=args.wandb_mode,
-        wandb_group=args.wandb_group,
+        include_mlp=args.include_mlp,
+        tracker=tracker,
     )
-    # print(results["metric_summary"])
 
 
 def set_random_seeds(seed: int) -> None:
@@ -97,195 +134,197 @@ def run_cross_validation(
     learning_rate: float = 1e-3,
     early_stopping_patience: int | None = 8,
     random_seed: int = 42,
-    wandb_project: str | None = None,
-    wandb_entity: str | None = None,
-    wandb_mode: str | None = None,
-    wandb_group: str | None = None,
-) -> dict[str, Any]:
-    """Run the full CV experiment and save fold-level outputs."""
+    include_mlp: bool = False,
+    tracker: Tracker | None = None,
+) -> dict[str, object]:
+    """Run the full CV experiment and write the flat output contract."""
     output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    tracker = tracker if tracker is not None else NullTracker()
+
+    started_at = datetime.now(timezone.utc).isoformat()
+    dataset_path = str(windows_path)
     windows_df = pd.read_parquet(windows_path)
+
+    cv_config = CrossValidationConfig(
+        n_splits=n_splits,
+        validation_subject_count=validation_subject_count,
+        random_seed=random_seed,
+    )
+    model_config = ModelConfig()
+    training_config = TrainingConfig(
+        epochs=epochs,
+        batch_size=batch_size,
+        learning_rate=learning_rate,
+        early_stopping_patience=early_stopping_patience,
+        seed=random_seed,
+    )
+
     base_folds = (
         splits.make_loso_folds(windows_df)
-        if n_splits is None
-        else splits.make_group_folds(windows_df, n_splits=n_splits, random_seed=random_seed)
+        if cv_config.n_splits is None
+        else splits.make_group_folds(windows_df, n_splits=cv_config.n_splits, random_seed=cv_config.random_seed)
     )
     folds = [
         splits.add_validation_subjects(
             fold,
-            validation_subject_count=validation_subject_count,
-            random_seed=random_seed + fold_idx,
+            validation_subject_count=cv_config.validation_subject_count,
+            random_seed=cv_config.random_seed + fold_idx,
         )
         for fold_idx, fold in enumerate(base_folds)
     ]
     splits.save_fold_assignments(folds, output_dir / "folds.json")
 
     baseline_specs = baselines.available_baselines(windows_df)
-    model_config = {"hidden_dims": (64, 32), "dropout": 0.25, "weight_decay": 1e-4}
-    mlp_run_name = "mlp_regularized"
+    run_names = [spec.name for spec in baseline_specs] + ([MLP_RUN_NAME] if include_mlp else [])
+    _log_run_header(windows_df, dataset_path, cv_config, run_names, output_dir, len(folds))
+
+    tracker.start_experiment(
+        {
+            "dataset_path": dataset_path,
+            "cv_strategy": cv_config.strategy,
+            "n_splits": len(folds),
+            "validation_subject_count": cv_config.validation_subject_count,
+            "seed": random_seed,
+            "include_mlp": include_mlp,
+            **_dataclass_dict(model_config),
+            **_dataclass_dict(training_config),
+        }
+    )
+
+    results: list[RunResult] = []
     split_summaries = []
-    learning_curves = []
-    prediction_tables = []
-    fold_metrics = []
 
     for fold_idx, fold in enumerate(folds, start=1):
         splits.assert_disjoint_subjects(fold)
         split_summary = splits.describe_split(windows_df, fold)
         split_summary.insert(0, "fold", fold_idx)
         split_summaries.append(split_summary)
+        logger.debug("Fold %d/%d", fold_idx, len(folds))
 
         train_df = splits.filter_split(windows_df, fold["train"])
         validation_df = splits.filter_split(windows_df, fold["validation"])
         test_df = splits.filter_split(windows_df, fold["test"])
 
         for baseline_spec in baseline_specs:
-            test_predictions = baselines.predict_baseline(
-                train_df,
-                test_df,
-                baseline_spec,
-                random_seed=random_seed + fold_idx,
+            result = _run_baseline(baseline_spec, train_df, test_df, fold_idx, random_seed)
+            tracker.log_fold(result.run_name, fold_idx, result.fold_metrics)
+            results.append(result)
+
+        if include_mlp:
+            fold_data = dataset.prepare_fold_datasets(
+                train_df=train_df,
+                validation_df=validation_df,
+                test_df=test_df,
             )
-            video_predictions = aggregate_window_predictions(test_predictions)
-            video_predictions.insert(0, "run", baseline_spec.name)
-            video_predictions.insert(1, "fold", fold_idx)
-            prediction_tables.append(video_predictions)
-
-            metric_row = metrics.classification_metric_summary(
-                video_predictions["label"],
-                video_predictions["pred_label"],
-            )
-            metric_row.update({"run": baseline_spec.name, "fold": fold_idx, "n_videos": len(video_predictions)})
-            fold_metrics.append(metric_row)
-
-            metrics.confusion_matrix_table(video_predictions["label"], video_predictions["pred_label"]).to_csv(
-                output_dir / f"{baseline_spec.name}_fold{fold_idx}_confusion_matrix.csv"
-            )
-
-        fold_data = dataset.prepare_fold_datasets(
-            train_df=train_df,
-            validation_df=validation_df,
-            test_df=test_df,
-        )
-
-        fold_run_name = f"{mlp_run_name}-fold{fold_idx}"
-        fold_model_config = {
-            "hidden_dims": model_config["hidden_dims"],
-            "dropout": model_config["dropout"],
-            "num_classes": 3,
-        }
-        fold_training_config = {
-            "epochs": epochs,
-            "batch_size": batch_size,
-            "learning_rate": learning_rate,
-            "weight_decay": model_config["weight_decay"],
-            "early_stopping_patience": early_stopping_patience,
-            "early_stopping_metric": "validation_qwk",
-            "seed": random_seed + fold_idx,
-        }
-        wandb_run = _init_wandb_run(
-            project=wandb_project,
-            entity=wandb_entity,
-            mode=wandb_mode,
-            group=wandb_group,
-            run_name=fold_run_name,
-            config={
-                "fold": fold_idx,
-                "n_splits": n_splits if n_splits is not None else len(base_folds),
-                "cv_strategy": "loso" if n_splits is None else "group_kfold",
-                "validation_subject_count": validation_subject_count,
-                **fold_model_config,
-                **fold_training_config,
-            },
-        )
-        try:
-            model_result = train_fold(
-                fold_data,
-                model_config=fold_model_config,
-                training_config=fold_training_config,
-                wandb_run=wandb_run,
-            )
-
-            for epoch_idx, epoch_metrics in enumerate(model_result["history"], start=1):
-                learning_curves.append(
-                    {
-                        "run": mlp_run_name,
-                        "fold": fold_idx,
-                        "epoch": epoch_idx,
-                        "selected_checkpoint": epoch_idx == model_result["best_epoch"],
-                        **{f"train_{metric_name}": value for metric_name, value in epoch_metrics["train"].items()},
-                        **{
-                            f"validation_{metric_name}": value
-                            for metric_name, value in epoch_metrics["validation"].items()
-                        },
-                    }
-                )
-
-            test_predictions = predict_split(model_result["model"], fold_data, "test")
-            video_predictions = aggregate_window_predictions(test_predictions)
-            video_predictions.insert(0, "run", mlp_run_name)
-            video_predictions.insert(1, "fold", fold_idx)
-            prediction_tables.append(video_predictions)
-
-            metric_row = metrics.classification_metric_summary(
-                video_predictions["label"],
-                video_predictions["pred_label"],
-            )
-            _log_final_test_metrics(wandb_run, metric_row, len(video_predictions))
-            metric_row.update(
-                {
-                    "run": mlp_run_name,
-                    "fold": fold_idx,
-                    "n_videos": len(video_predictions),
-                    "best_epoch": model_result["best_epoch"],
-                    "stopped_early": model_result["stopped_early"],
-                }
-            )
-            fold_metrics.append(metric_row)
-
-            metrics.confusion_matrix_table(video_predictions["label"], video_predictions["pred_label"]).to_csv(
-                output_dir / f"{mlp_run_name}_fold{fold_idx}_confusion_matrix.csv"
-            )
-        finally:
-            if wandb_run is not None:
-                wandb_run.finish()
+            result = _run_mlp(fold_data, fold_idx, model_config, training_config, tracker)
+            tracker.log_fold(result.run_name, fold_idx, result.fold_metrics)
+            results.append(result)
 
     split_summaries_df = pd.concat(split_summaries, ignore_index=True)
-    learning_curves_df = pd.DataFrame(learning_curves)
-    video_predictions_df = pd.concat(prediction_tables, ignore_index=True)
-    fold_metrics_df = pd.DataFrame(fold_metrics)
-    metric_summary_df = fold_metrics_df.groupby("run")[["qwk", "rank_mae", "accuracy", "macro_f1"]].agg(
-        ["mean", "std"]
+    manifest = _build_manifest(
+        windows_path=windows_path,
+        cv_config=cv_config,
+        model_config=model_config,
+        training_config=training_config,
+        include_mlp=include_mlp,
+        started_at=started_at,
+        ended_at=datetime.now(timezone.utc).isoformat(),
+        used_wandb=not isinstance(tracker, NullTracker),
     )
 
-    confidence_tables = []
-    error_tables = []
-    for (run_name, fold_idx), fold_predictions in video_predictions_df.groupby(["run", "fold"]):
-        confidence_table = metrics.confidence_summary(fold_predictions)
-        confidence_table.insert(0, "run", run_name)
-        confidence_table.insert(1, "fold", fold_idx)
-        confidence_tables.append(confidence_table)
+    tables = artifacts.write_run_outputs(
+        output_dir,
+        results=results,
+        split_summaries=split_summaries_df,
+        manifest=manifest,
+    )
 
-        error_table = metrics.error_slice_summary(fold_predictions, "label")
-        error_table.insert(0, "run", run_name)
-        error_table.insert(1, "fold", fold_idx)
-        error_tables.append(error_table)
+    tracker.log_summary(_summary_metrics(tables["metric_summary"]))
+    tracker.finish()
 
-    split_summaries_df.to_csv(output_dir / "split_summaries.csv", index=False)
-    learning_curves_df.to_csv(output_dir / "learning_curves.csv", index=False)
-    video_predictions_df.to_csv(output_dir / "video_predictions.csv", index=False)
-    fold_metrics_df.to_csv(output_dir / "fold_metrics.csv", index=False)
-    metric_summary_df.to_csv(output_dir / "metric_summary.csv")
-    pd.concat(confidence_tables, ignore_index=True).to_csv(output_dir / "confidence_by_correctness.csv", index=False)
-    pd.concat(error_tables, ignore_index=True).to_csv(output_dir / "error_by_true_label.csv", index=False)
+    _log_run_footer(tables, output_dir)
+    return {"folds": folds, "manifest": manifest, **tables}
 
-    return {
-        "folds": folds,
-        "split_summaries": split_summaries_df,
-        "learning_curves": learning_curves_df,
-        "video_predictions": video_predictions_df,
-        "fold_metrics": fold_metrics_df,
-        "metric_summary": metric_summary_df,
-    }
+
+def _run_baseline(
+    spec: baselines.BaselineSpec,
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    fold_idx: int,
+    random_seed: int,
+) -> RunResult:
+    """Fit one baseline for one fold and package it as a RunResult."""
+    test_predictions = baselines.predict_baseline(train_df, test_df, spec, random_seed=random_seed + fold_idx)
+    video_predictions = aggregate_window_predictions(test_predictions)
+    video_predictions.insert(0, "run", spec.name)
+    video_predictions.insert(1, "fold", fold_idx)
+
+    fold_metrics = metrics.classification_metric_summary(video_predictions["label"], video_predictions["pred_label"])
+    fold_metrics.update({"run": spec.name, "fold": fold_idx, "n_videos": len(video_predictions)})
+    return RunResult(run_name=spec.name, fold=fold_idx, video_predictions=video_predictions, fold_metrics=fold_metrics)
+
+
+def _run_mlp(
+    fold_data: FoldDatasets,
+    fold_idx: int,
+    model_config: ModelConfig,
+    training_config: TrainingConfig,
+    tracker: Tracker,
+) -> RunResult:
+    """Train the MLP for one fold and package it as a RunResult."""
+    fold_training_config = TrainingConfig(
+        epochs=training_config.epochs,
+        batch_size=training_config.batch_size,
+        learning_rate=training_config.learning_rate,
+        early_stopping_patience=training_config.early_stopping_patience,
+        early_stopping_metric=training_config.early_stopping_metric,
+        early_stopping_min_delta=training_config.early_stopping_min_delta,
+        seed=training_config.seed + fold_idx,
+    )
+    model_result = train_fold(
+        fold_data,
+        model_config,
+        fold_training_config,
+        tracker=tracker,
+        run_name=MLP_RUN_NAME,
+        fold=fold_idx,
+    )
+
+    learning_curve = [
+        {
+            "run": MLP_RUN_NAME,
+            "fold": fold_idx,
+            "epoch": epoch_idx,
+            "selected_checkpoint": epoch_idx == model_result["best_epoch"],
+            **{f"train_{name}": value for name, value in epoch_metrics["train"].items()},
+            **{f"validation_{name}": value for name, value in epoch_metrics["validation"].items()},
+        }
+        for epoch_idx, epoch_metrics in enumerate(model_result["history"], start=1)
+    ]
+
+    test_predictions = predict_split(model_result["model"], fold_data, "test")
+    video_predictions = aggregate_window_predictions(test_predictions)
+    video_predictions.insert(0, "run", MLP_RUN_NAME)
+    video_predictions.insert(1, "fold", fold_idx)
+
+    fold_metrics = metrics.classification_metric_summary(video_predictions["label"], video_predictions["pred_label"])
+    fold_metrics.update(
+        {
+            "run": MLP_RUN_NAME,
+            "fold": fold_idx,
+            "n_videos": len(video_predictions),
+            "best_epoch": model_result["best_epoch"],
+            "stopped_early": model_result["stopped_early"],
+        }
+    )
+    return RunResult(
+        run_name=MLP_RUN_NAME,
+        fold=fold_idx,
+        video_predictions=video_predictions,
+        fold_metrics=fold_metrics,
+        learning_curve=learning_curve,
+    )
 
 
 def _epoch_metric_summary(total_loss: float, total: int, y_true: list[int], y_pred: list[int]) -> dict[str, float]:
@@ -297,13 +336,18 @@ def _epoch_metric_summary(total_loss: float, total: int, y_true: list[int], y_pr
     return {"loss": total_loss / total, **metric_summary}
 
 
-def train_one_epoch(model: Any, dataloader: Any, optimizer: Any, loss_fn: Any) -> dict[str, float]:
+def train_one_epoch(
+    model: torch.nn.Module,
+    dataloader: DataLoader,
+    optimizer: torch.optim.Optimizer,
+    loss_fn: torch.nn.Module,
+) -> dict[str, float]:
     """Run one training epoch and return training metrics."""
     model.train()
     total_loss = 0.0
     total = 0
-    y_true = []
-    y_pred = []
+    y_true: list[int] = []
+    y_pred: list[int] = []
 
     for batch_x, batch_y in dataloader:
         optimizer.zero_grad()
@@ -322,13 +366,17 @@ def train_one_epoch(model: Any, dataloader: Any, optimizer: Any, loss_fn: Any) -
     return _epoch_metric_summary(total_loss, total, y_true, y_pred)
 
 
-def evaluate_one_epoch(model: Any, dataloader: Any, loss_fn: Any) -> dict[str, float]:
+def evaluate_one_epoch(
+    model: torch.nn.Module,
+    dataloader: DataLoader,
+    loss_fn: torch.nn.Module,
+) -> dict[str, float]:
     """Run one validation or test pass and return metrics."""
     model.eval()
     total_loss = 0.0
     total = 0
-    y_true = []
-    y_pred = []
+    y_true: list[int] = []
+    y_pred: list[int] = []
 
     with torch.no_grad():
         for batch_x, batch_y in dataloader:
@@ -345,96 +393,54 @@ def evaluate_one_epoch(model: Any, dataloader: Any, loss_fn: Any) -> dict[str, f
     return _epoch_metric_summary(total_loss, total, y_true, y_pred)
 
 
-def _init_wandb_run(
-    *,
-    project: str | None,
-    entity: str | None,
-    mode: str | None,
-    group: str,
-    run_name: str,
-    config: dict[str, Any],
-) -> Any | None:
-    """Create a W&B run when tracking is enabled."""
-    if project is None:
-        return None
-
-    if wandb is None:
-        raise RuntimeError("wandb is not installed. Install dependencies or omit --wandb-project.")
-
-    init_kwargs = {
-        "project": project,
-        "name": run_name,
-        "group": group,
-        "config": config,
-        "tags": ["cross-validation", run_name.split("-fold")[0]],
-    }
-    if entity is not None:
-        init_kwargs["entity"] = entity
-    if mode is not None:
-        init_kwargs["mode"] = mode
-
-    return wandb.init(**init_kwargs)
-
-
-def _log_epoch_metrics(wandb_run: Any | None, epoch: int, epoch_metrics: dict[str, dict[str, float]]) -> None:
-    """Log one epoch of train/validation metrics to W&B."""
-    if wandb_run is None:
-        return
-
-    wandb_run.log(
-        {
-            "epoch": epoch,
-            **{f"train/{metric_name}": value for metric_name, value in epoch_metrics["train"].items()},
-            **{f"validation/{metric_name}": value for metric_name, value in epoch_metrics["validation"].items()},
-        },
-        step=epoch,
-    )
-
-
-def _log_final_test_metrics(wandb_run: Any | None, metric_row: dict[str, float], n_videos: int) -> None:
-    """Log fold-level video metrics after training finishes."""
-    if wandb_run is None:
-        return
-
-    wandb_run.log({**{f"test/{name}": value for name, value in metric_row.items()}, "test/n_videos": n_videos})
-
-
 def train_fold(
-    fold_data: dict[str, Any],
-    model_config: dict[str, Any],
-    training_config: dict[str, Any],
-    wandb_run: Any | None = None,
-) -> dict[str, Any]:
+    fold_data: FoldDatasets,
+    model_config: ModelConfig,
+    training_config: TrainingConfig,
+    *,
+    tracker: Tracker | None = None,
+    run_name: str = MLP_RUN_NAME,
+    fold: int = 0,
+) -> dict[str, object]:
     """Train one model for one subject-wise fold."""
-    set_random_seeds(training_config.get("seed", 0))
-    dataloaders = dataset.make_dataloaders(fold_data, batch_size=training_config.get("batch_size", 64))
+    tracker = tracker if tracker is not None else NullTracker()
+    set_random_seeds(training_config.seed)
+    dataloaders = dataset.make_dataloaders(fold_data, batch_size=training_config.batch_size)
     model = models.build_cross_entropy_mlp(
         input_dim=len(fold_data["feature_columns"]),
-        hidden_dims=model_config.get("hidden_dims", (64, 32)),
-        dropout=model_config.get("dropout", 0.0),
-        num_classes=model_config.get("num_classes", 3),
+        hidden_dims=model_config.hidden_dims,
+        dropout=model_config.dropout,
+        num_classes=model_config.num_classes,
     )
     optimizer = torch.optim.Adam(
         model.parameters(),
-        lr=training_config.get("learning_rate", 1e-3),
-        weight_decay=training_config.get("weight_decay", 0.0),
+        lr=training_config.learning_rate,
+        weight_decay=model_config.weight_decay,
     )
     loss_fn = torch.nn.CrossEntropyLoss()
-    history = []
+    history: list[dict[str, dict[str, float]]] = []
     best_epoch = 0
     best_score = float("-inf")
     best_state = copy.deepcopy(model.state_dict())
     epochs_without_improvement = 0
-    patience = training_config.get("early_stopping_patience")
+    patience = training_config.early_stopping_patience
     use_early_stopping = patience is not None and patience >= 0
-    min_delta = training_config.get("early_stopping_min_delta", 0.0)
+    min_delta = training_config.early_stopping_min_delta
 
-    for epoch_idx in range(1, training_config.get("epochs", 1) + 1):
+    for epoch_idx in range(1, training_config.epochs + 1):
         train_metrics = train_one_epoch(model, dataloaders["train"], optimizer, loss_fn)
         validation_metrics = evaluate_one_epoch(model, dataloaders["validation"], loss_fn)
         epoch_metrics = {"train": train_metrics, "validation": validation_metrics}
         history.append(epoch_metrics)
-        _log_epoch_metrics(wandb_run, epoch_idx, epoch_metrics)
+        tracker.log_epoch(
+            run_name,
+            fold,
+            epoch_idx,
+            {
+                **{f"train/{name}": value for name, value in train_metrics.items()},
+                **{f"validation/{name}": value for name, value in validation_metrics.items()},
+            },
+        )
 
         selection_score = _selection_score(validation_metrics)
         if best_epoch == 0 or selection_score > best_score + min_delta:
@@ -454,7 +460,7 @@ def train_fold(
         "history": history,
         "best_epoch": best_epoch,
         "best_validation_qwk": best_score,
-        "stopped_early": use_early_stopping and len(history) < training_config.get("epochs", 1),
+        "stopped_early": use_early_stopping and len(history) < training_config.epochs,
     }
 
 
@@ -486,7 +492,7 @@ def aggregate_window_predictions(predictions_df: pd.DataFrame) -> pd.DataFrame:
     return aggregated
 
 
-def predict_split(model: Any, fold_data: dict[str, Any], split_name: str) -> pd.DataFrame:
+def predict_split(model: torch.nn.Module, fold_data: FoldDatasets, split_name: str) -> pd.DataFrame:
     """Return window-level class probabilities with split metadata."""
     split = fold_data[split_name]
     split_x = torch.as_tensor(split["x"], dtype=torch.float32)
@@ -497,6 +503,128 @@ def predict_split(model: Any, fold_data: dict[str, Any], split_name: str) -> pd.
         predictions_df[f"prob_{class_idx}"] = probabilities[:, class_idx]
 
     return predictions_df
+
+
+def _dataclass_dict(config: object) -> dict[str, object]:
+    """Shallow dataclass-to-dict that keeps tuples JSON-friendly as lists."""
+    from dataclasses import asdict
+
+    return {key: (list(value) if isinstance(value, tuple) else value) for key, value in asdict(config).items()}
+
+
+def _git_sha() -> str | None:
+    """Return the current commit SHA, or None if git is unavailable."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return None
+    return result.stdout.strip() or None
+
+
+def _package_versions(used_wandb: bool) -> dict[str, str | None]:
+    packages = ["numpy", "pandas", "torch", "scikit-learn"]
+    if used_wandb:
+        packages.append("wandb")
+    versions: dict[str, str | None] = {"python": _python_version()}
+    for package in packages:
+        try:
+            versions[package] = importlib_metadata.version(package)
+        except importlib_metadata.PackageNotFoundError:
+            versions[package] = None
+    return versions
+
+
+def _python_version() -> str:
+    import sys
+
+    return f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+
+
+def _build_manifest(
+    *,
+    windows_path: str | Path,
+    cv_config: CrossValidationConfig,
+    model_config: ModelConfig,
+    training_config: TrainingConfig,
+    include_mlp: bool,
+    started_at: str,
+    ended_at: str,
+    used_wandb: bool,
+) -> dict[str, object]:
+    return {
+        "dataset_path": str(windows_path),
+        "cv_strategy": cv_config.strategy,
+        "seed": cv_config.random_seed,
+        "include_mlp": include_mlp,
+        "config": {
+            "model": _dataclass_dict(model_config),
+            "training": _dataclass_dict(training_config),
+            "cross_validation": _dataclass_dict(cv_config),
+        },
+        "package_versions": _package_versions(used_wandb),
+        "git_sha": _git_sha(),
+        "started_at": started_at,
+        "ended_at": ended_at,
+    }
+
+
+def _summary_metrics(metric_summary: pd.DataFrame) -> dict[str, object]:
+    """Flatten the metric-summary table into scalar W&B summary values."""
+    if metric_summary.empty:
+        return {}
+    summary: dict[str, object] = {}
+    for run_name, row in metric_summary.iterrows():
+        for (metric_name, stat), value in row.items():
+            summary[f"{run_name}/{metric_name}_{stat}"] = float(value)
+    return summary
+
+
+def _log_run_header(
+    windows_df: pd.DataFrame,
+    dataset_path: str,
+    cv_config: CrossValidationConfig,
+    run_names: list[str],
+    output_dir: Path,
+    n_folds: int,
+) -> None:
+    logger.info("Training alertness classifier")
+    logger.info(
+        "Dataset: %s (%d subjects, %d videos, %d windows)",
+        dataset_path,
+        windows_df["subject_id"].nunique(),
+        windows_df["video_id"].nunique(),
+        len(windows_df),
+    )
+    logger.info(
+        "CV: %s, %d folds, validation subjects per fold: %d",
+        cv_config.strategy.upper(),
+        n_folds,
+        cv_config.validation_subject_count,
+    )
+    logger.info("Runs: %s", ", ".join(run_names))
+    logger.info("Output: %s", output_dir)
+
+
+def _log_run_footer(tables: dict[str, pd.DataFrame], output_dir: Path) -> None:
+    summary = tables["metric_summary"]
+    logger.info("Final video-level metrics:")
+    if not summary.empty:
+        for run_name, row in summary.iterrows():
+            logger.info(
+                "  %-16s QWK %.3f +/- %.3f   rank MAE %.3f",
+                run_name,
+                row[("qwk", "mean")],
+                row[("qwk", "std")],
+                row[("rank_mae", "mean")],
+            )
+    logger.info("Diagnostics written:")
+    for name in ("fold_metrics.csv", "confusion_matrices.csv", "diagnostics.csv"):
+        logger.info("  %s", output_dir / name)
 
 
 if __name__ == "__main__":

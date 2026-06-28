@@ -14,30 +14,46 @@ debugging training behavior.
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Sequence
 
 import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, cohen_kappa_score, confusion_matrix, f1_score
 
+# Ordinal class labels, used as a fixed axis so empty cells still appear.
+Labels = Sequence[int] | pd.Series | np.ndarray
 
-def quadratic_weighted_kappa(y_true: Any, y_pred: Any) -> float:
+
+def quadratic_weighted_kappa(y_true: Labels, y_pred: Labels) -> float:
     """Compute quadratic weighted kappa for ordinal predictions."""
     return float(cohen_kappa_score(y_true, y_pred, weights="quadratic"))
 
 
-def rank_mae(y_true: Any, y_pred: Any) -> float:
+def rank_mae(y_true: Labels, y_pred: Labels) -> float:
     """Compute mean absolute error over ordinal class ranks."""
     return float(np.mean(np.abs(np.asarray(y_true) - np.asarray(y_pred))))
 
 
-def confusion_matrix_table(y_true: Any, y_pred: Any) -> pd.DataFrame:
+def confusion_matrix_table(y_true: Labels, y_pred: Labels) -> pd.DataFrame:
     """Build a labeled 3x3 confusion matrix."""
     labels = [0, 1, 2]
     return pd.DataFrame(confusion_matrix(y_true, y_pred, labels=labels), index=labels, columns=labels)
 
 
-def classification_metric_summary(y_true: Any, y_pred: Any) -> dict[str, float]:
+def confusion_long_form(y_true: Labels, y_pred: Labels) -> pd.DataFrame:
+    """Return the confusion matrix as long-form rows: true_label, pred_label, count."""
+    labels = [0, 1, 2]
+    matrix = confusion_matrix(y_true, y_pred, labels=labels)
+    return pd.DataFrame(
+        [
+            {"true_label": true_label, "pred_label": pred_label, "count": int(matrix[i, j])}
+            for i, true_label in enumerate(labels)
+            for j, pred_label in enumerate(labels)
+        ]
+    )
+
+
+def classification_metric_summary(y_true: Labels, y_pred: Labels) -> dict[str, float]:
     """Return the main metric bundle for one fold or split."""
     return {
         "qwk": quadratic_weighted_kappa(y_true, y_pred),

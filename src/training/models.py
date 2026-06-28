@@ -11,8 +11,6 @@ one regularized version for the generalization intervention.
 
 from __future__ import annotations
 
-from typing import Any
-
 import torch
 
 
@@ -21,24 +19,24 @@ def build_cross_entropy_mlp(
     hidden_dims: tuple[int, ...],
     dropout: float,
     num_classes: int,
-) -> Any:
+) -> torch.nn.Module:
     """Create the main 3-class MLP baseline."""
     return _build_mlp(input_dim=input_dim, hidden_dims=hidden_dims, dropout=dropout, output_dim=num_classes)
 
 
-def predict_logits(model: Any, batch: Any) -> Any:
+def predict_logits(model: torch.nn.Module, batch: torch.Tensor) -> torch.Tensor:
     """Run the model and return raw logits."""
     model.eval()
     with torch.no_grad():
         return model(batch)
 
 
-def predict_probabilities(model: Any, batch: Any) -> Any:
+def predict_probabilities(model: torch.nn.Module, batch: torch.Tensor) -> torch.Tensor:
     """Convert model outputs into class probabilities or ordinal probabilities."""
     return torch.softmax(predict_logits(model, batch), dim=1)
 
 
-def predict_labels(model: Any, batch: Any) -> Any:
+def predict_labels(model: torch.nn.Module, batch: torch.Tensor) -> torch.Tensor:
     """Convert model outputs into predicted class labels."""
     return predict_probabilities(model, batch).argmax(dim=1)
 
