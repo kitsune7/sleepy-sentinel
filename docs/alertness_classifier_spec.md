@@ -14,7 +14,7 @@ intended design **and** the current project state as of Assignment 6 (June 2026)
 | 2 | Windowing + summary features (`data_prep.windows` → `data/frame_windows.parquet`) | **Done** |
 | 3 | Per-subject EAR norm + train-only scaler (`training.dataset`) | **Done** |
 | 4 | Subject-wise CV splits (`training.splits`, saved to `outputs/folds.json`) | **Done** — **LOSO is the primary evaluation** |
-| 5 | Neural model training (`training.train`, `training.models`) | **Done** — cross-entropy MLP only; CORN head **not yet wired** |
+| 5 | Neural model training (`training.train`, `training.models`) | **Done** — cross-entropy MLP, opt-in via `--include-mlp`; CORN head **not implemented** |
 | 6 | Window→video aggregation + metrics | **Done** |
 | 7 | Evaluation metrics (`evaluation.metrics`) | **Done** |
 | 8 | Baselines (`training.baselines`) | **Done** — majority, luminance-only, PERCLOS-only |
@@ -27,12 +27,18 @@ complexity.
 Assignment 5 used 5-fold GroupKFold as an intermediate step; LOSO is the
 gold-standard estimate going forward.
 
-**Run the full pipeline:**
+**Run training:**
 
 ```bash
-uv run train_alertness                          # writes to outputs/
-uv run train_alertness --wandb-project sleepy-sentinel   # optional W&B logging
+uv run train_alertness                          # baselines only → writes to outputs/
+uv run train_alertness --include-mlp            # also train the regularized MLP
+uv run train_alertness --wandb-project sleepy-sentinel   # optional W&B (one run per command)
 ```
+
+The default run trains only the baselines (majority, luminance-only,
+PERCLOS-only), since PERCLOS-only is the strongest candidate and the MLP does
+not beat it. Pass `--include-mlp` to add the regularized MLP. Every run writes a
+fixed, flat set of files into `outputs/` (see §10/§15).
 
 ---
 
@@ -91,8 +97,8 @@ clinical, employer, or safety-critical system.
       --[Stage 7: metrics]  vs  [Stage 8: baselines]
 ```
 
-All stages are implemented. Stage 5 currently trains a cross-entropy MLP; the
-CORN ordinal head remains planned (see §15).
+All stages are implemented. Stage 5 trains a cross-entropy MLP (opt-in via
+`--include-mlp`); the CORN ordinal head is not implemented (see §15).
 
 ---
 
@@ -232,7 +238,8 @@ are saved to `outputs/folds.json`.
 
 ### Implemented: regularized cross-entropy MLP
 
-This is the model currently trained by `uv run train_alertness`.
+This model is trained when you pass `--include-mlp`; the default run is
+baselines only.
 
 - **Architecture:** input ~17 summary features (all columns except IDs, label,
   and `frac_face_missing`) → hidden `(64, 32)` → ReLU → dropout 0.25 → 3-way
@@ -273,8 +280,9 @@ loss = corn_loss(logits, y, num_classes=3)
 pred_rank = corn_label_from_logits(logits)   # -> {0,1,2}
 ```
 
-`models.build_ordinal_mlp` exists as a stub but is not wired into
-`training.train`. The CORN vs. cross-entropy A/B remains an open experiment (§15).
+The CORN ordinal head is **not implemented** — there is no ordinal-MLP builder
+in `training.models`. The CORN vs. cross-entropy A/B remains an open experiment
+(§15).
 
 ### Planned: alternative tabular models
 
@@ -321,8 +329,10 @@ Secondary (report but don't optimize): macro-F1, accuracy, Spearman correlation.
 
 **Reporting format:** every metric as **mean ± std across CV folds**, at the
 **video level**. Include the aggregated confusion matrix summed over folds.
-Additional diagnostic outputs: `confidence_by_correctness.csv`,
-`error_by_true_label.csv`, per-fold confusion matrices, learning curves (MLP).
+Additional diagnostic outputs: `confusion_matrices.csv` (one long-form table,
+columns `run, fold, true_label, pred_label, count`), `diagnostics.csv` (one
+grouped table with a `diagnostic` column covering confidence-by-correctness and
+error-by-true-label), and `learning_curves.csv` (MLP only).
 
 ---
 
@@ -422,7 +432,7 @@ and easier to explain.
 | 8. Full-feature interpretable model | extend `training.baselines` or new module | **Not started** |
 | 9. LightGBM comparison | new module | **Not started** (optional) |
 | 10. Confidence calibration | post-hoc on saved predictions | **Not started** |
-| 11. Subgroup error analysis | slice `error_by_true_label.csv` by covariates | **Not started** |
+| 11. Subgroup error analysis | slice `diagnostics.csv` (error-by-true-label rows) by covariates | **Not started** |
 
 ---
 
@@ -439,7 +449,7 @@ same LOSO folds and aggregation. **If it cannot beat PERCLOS, keep PERCLOS.**
 
 ### Priority 2 — CORN ordinal head vs. cross-entropy MLP
 
-Wire up `build_ordinal_mlp` + CORN loss and compare against the regularized
+Add an ordinal-MLP head + CORN loss and compare against the regularized
 cross-entropy MLP and PERCLOS-only. Require a real gain on QWK, rank-MAE, and
 the alert↔drowsy off-by-two corners — a higher mean alone is not enough if fold
 bands remain this wide.
@@ -489,14 +499,25 @@ to `outputs/folds.json` so every run is reproducible. Pin package versions in
 | `--n-splits` | `None` (LOSO) |
 | `--validation-subject-count` | 9 |
 | `--early-stopping-patience` | 8 |
+| `--include-mlp` | off (baselines only) |
+| `--verbose` | off (concise summary) |
+
+W&B is optional and off unless `--wandb-project` is given. The command-level CV
+experiment is logged as a **single** W&B run, with per-fold (`fold_metrics`) and
+per-epoch (`learning_curves`) numbers as W&B Tables under it. The legacy
+one-run-per-model/fold behavior is available via `--wandb-per-fold-runs`.
 
 PyTorch training can still have small hardware/library nondeterminism; saved
 CSVs in `outputs/` are the run evidence for writeups.
 
-**Output artifacts:** `metric_summary.csv`, `fold_metrics.csv`,
-`video_predictions.csv`, `learning_curves.csv`, `split_summaries.csv`,
-`confidence_by_correctness.csv`, `error_by_true_label.csv`, per-fold confusion
-matrices.
+**Output artifacts (flat, fixed contract):** every run writes exactly these
+files into `outputs/` and nothing else — `manifest.json` (config, dataset path,
+cv_strategy, seed, package_versions, git_sha, started_at/ended_at),
+`metric_summary.csv`, `fold_metrics.csv`, `video_predictions.csv`,
+`learning_curves.csv` (header-only unless the MLP ran), `confusion_matrices.csv`
+(one long-form table: `run, fold, true_label, pred_label, count`),
+`diagnostics.csv` (one grouped table with a `diagnostic` column),
+`folds.json`, and `split_summaries.csv`.
 
 ---
 

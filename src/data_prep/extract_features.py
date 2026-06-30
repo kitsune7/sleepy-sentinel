@@ -47,6 +47,7 @@ Examples
 
 import argparse
 import csv
+import logging
 import math
 import os
 import sys
@@ -63,6 +64,8 @@ from mediapipe.tasks.python import vision as mp_vision
 # --------------------------------------------------------------------------- #
 # Configuration
 # --------------------------------------------------------------------------- #
+
+logger = logging.getLogger(__name__)
 
 # filename stem -> ordinal class label
 LABEL_MAP = {"0": 0, "5": 1, "10": 2}
@@ -157,7 +160,7 @@ def download_model(model_path, url=MODEL_URL):
     tmp_path = f"{target}.download"
     os.makedirs(os.path.dirname(target), exist_ok=True)
 
-    print(f"[dl]   {url} -> {target}")
+    logger.info(f"[dl]   {url} -> {target}")
     try:
         urllib.request.urlretrieve(url, tmp_path)
         os.replace(tmp_path, target)
@@ -358,20 +361,22 @@ def out_path_for(out_root, subject, video_path):
     return os.path.join(out_root, subject, f"{stem}.csv")
 
 
-def run_one(video_path, out_csv, args):
+def run_one(video_path, out_csv, args, show_progress):
+    """Extract one video. Returns "skipped" or "processed"."""
     if os.path.exists(out_csv) and not args.overwrite:
-        print(f"[skip] {out_csv} exists")
-        return
+        logger.debug(f"[skip] {out_csv} exists")
+        return "skipped"
     landmarker = make_landmarker(args.model)
     try:
-        n, faces = process_video(video_path, out_csv, landmarker, args.frame_stride, not args.no_progress)
+        n, faces = process_video(video_path, out_csv, landmarker, args.frame_stride, show_progress)
     finally:
         landmarker.close()
     pct = (100.0 * faces / n) if n else 0.0
-    print(f"[ok]   {video_path} -> {out_csv}  ({n} frames, {pct:.1f}% with a face)")
+    logger.debug(f"[ok]   {video_path} -> {out_csv}  ({n} frames, {pct:.1f}% with a face)")
     if args.delete_source:
         os.remove(video_path)
-        print(f"[rm]   {video_path}")
+        logger.debug(f"[rm]   {video_path}")
+    return "processed"
 
 
 def main():
@@ -385,6 +390,7 @@ def main():
     ap.add_argument("--overwrite", action="store_true", help="re-extract even if the output CSV already exists")
     ap.add_argument("--delete-source", action="store_true", help="delete each source video AFTER its CSV is written")
     ap.add_argument("--no-progress", action="store_true", help="disable per-video terminal progress bars")
+    ap.add_argument("--verbose", action="store_true", help="show per-video detail, progress bars, and tracebacks")
     ap.add_argument(
         "--keep-going", action="store_true", default=True, help="continue past per-video errors (default on)"
     )
@@ -395,17 +401,18 @@ def main():
     ap.add_argument("--label", help="filename stem (0/5/10) for --video mode")
     args = ap.parse_args()
 
-    if os.path.exists(args.model):
-        print(f"[skip] {args.model} exists")
-    else:
-        download_model(args.model, args.model_url)
-    if not args.video and not args.root:
-        return
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(message)s")
+    show_progress = args.verbose and not args.no_progress
 
     if not args.video and not args.root:
         sys.exit("provide either --root or --video")
     if not args.out:
         sys.exit("provide --out for extraction output")
+
+    if os.path.exists(args.model):
+        logger.debug(f"[skip] {args.model} exists")
+    else:
+        download_model(args.model, args.model_url)
     if not os.path.exists(args.model):
         sys.exit(
             f"model not found: {args.model}\n"
@@ -413,21 +420,31 @@ def main():
             "or rerun with --download-model."
         )
 
-    print("Starting feature extraction...")
+    logger.info(f"output root: {args.out}")
     if args.video:
         subject = args.subject or "unknown"
         out_csv = out_path_for(args.out, subject, args.video)
-        run_one(args.video, out_csv, args)
-    elif args.root:
-        for subject, _label, vpath in iter_videos(args.root):
-            out_csv = out_path_for(args.out, subject, vpath)
-            try:
-                run_one(vpath, out_csv, args)
-            except Exception:
-                if not args.keep_going:
-                    raise
-                print(f"[err]  {vpath}\n{traceback.format_exc()}")
-    print("Feature extraction completed successfully.")
+        run_one(args.video, out_csv, args, show_progress)
+        return
+
+    discovered = processed = skipped = failed = 0
+    for subject, _label, vpath in iter_videos(args.root):
+        discovered += 1
+        out_csv = out_path_for(args.out, subject, vpath)
+        try:
+            status = run_one(vpath, out_csv, args, show_progress)
+            if status == "skipped":
+                skipped += 1
+            else:
+                processed += 1
+        except Exception:
+            if not args.keep_going:
+                raise
+            failed += 1
+            logger.debug(f"[err]  {vpath}\n{traceback.format_exc()}")
+    logger.info(
+        f"done: {discovered} videos discovered, {processed} processed, {skipped} skipped, {failed} failed"
+    )
 
 
 if __name__ == "__main__":

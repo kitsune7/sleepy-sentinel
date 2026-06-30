@@ -48,7 +48,8 @@
   accuracy/macro-F1 reporting. The majority baseline is a floor; luminance-only is the confound check; PERCLOS-only is the serious simple-model comparator.
 - **Ordinal handling:** predictions are still evaluated as the same three ordered classes `{0,1,2}`. QWK and rank-MAE therefore preserve the ordinal penalty even when the model itself is a simple classifier/baseline.
 - **Outputs:** root `outputs/metric_summary.csv`, `outputs/fold_metrics.csv`,
-  `outputs/video_predictions.csv`, and per-fold confusion matrices.
+  `outputs/video_predictions.csv`, and `outputs/confusion_matrices.csv` (one
+  long-form table covering every run and fold).
 
 ## Neural tabular model
 
@@ -60,7 +61,8 @@
   - **Validation-aware early stopping / checkpoint selection** — added for this assignment. The MLP stopped early in 58/60 folds; best epoch had mean 6.0, median 4.0, min 1, max 36. This confirms the assignment 5 diagnosis that fixed 100-epoch training was overtraining.
   - One regularization control — dropout + weight decay already in place.
 - **Outputs:** root `outputs/metric_summary.csv`, `outputs/fold_metrics.csv`,
-  `outputs/learning_curves.csv`, and `outputs/video_predictions.csv`.
+  `outputs/learning_curves.csv`, and `outputs/video_predictions.csv`. The MLP is
+  opt-in via `--include-mlp`; `learning_curves.csv` is header-only unless it ran.
 
 ## Categorical embeddings — appropriate or not?
 
@@ -104,7 +106,9 @@ PERCLOS is much better on true alert videos (48/60 correct vs. 36/60) and the ML
 
 ## Commands and Logs
 
-I ran `uv run train_alertness --wandb-project sleepy-sentinel` to get the output logs in `./outputs` and W&B. Without W&B, run `uv run train_alertness`. This runs the full pipeline with the default parameters below.
+I ran `uv run train_alertness --include-mlp --wandb-project sleepy-sentinel` to get the output logs in `./outputs` and W&B for all four runs (the three baselines plus the MLP). The default `uv run train_alertness` trains baselines only; add `--include-mlp` to include the MLP, and drop `--wandb-project` to skip W&B. Each training command is a **single** W&B run — per-fold (`fold_metrics`) and per-epoch (`learning_curves`) numbers are logged as W&B Tables under it. The legacy one-run-per-fold behavior is available via `--wandb-per-fold-runs`. This runs with the default parameters below.
+
+A run writes a fixed, flat set of files into `outputs/` and nothing else: `manifest.json`, `metric_summary.csv`, `fold_metrics.csv`, `video_predictions.csv`, `learning_curves.csv` (header-only unless the MLP ran), `confusion_matrices.csv`, `diagnostics.csv`, `folds.json`, and `split_summaries.csv`. The canonical evidence for this writeup is `metric_summary.csv` (headline mean±std per run), `fold_metrics.csv`, `confusion_matrices.csv`, `diagnostics.csv`, and `manifest.json` for provenance.
 
 ### Default parameters
 
@@ -119,7 +123,10 @@ I ran `uv run train_alertness --wandb-project sleepy-sentinel` to get the output
 | `--n-splits` | `int` | `None` | Override LOSO with grouped K-fold CV. |
 | `--validation-subject-count` | `int` | `9` | |
 | `--early-stopping-patience` | `int` | `8` | Validation-QWK patience; negative disables. |
-| `--wandb-project` | `str` | `None` | Enable W&B logging for each model/fold run. |
+| `--include-mlp` | flag | off | Train the regularized MLP in addition to the baselines. |
+| `--verbose` | flag | off | Fold-by-fold chatter; default output is a concise high-level summary. |
+| `--wandb-project` | `str` | `None` | Enable W&B logging; one run per training command. |
+| `--wandb-per-fold-runs` | flag | off | Legacy: spawn a separate W&B run per model/fold. |
 | `--wandb-entity` | `str` | `None` | Optional W&B team or username. |
 | `--wandb-mode` | `online`, `offline`, or `disabled` | `None` | |
 | `--wandb-group` | `str` | `None` | Optional W&B group name for the CV run. |
