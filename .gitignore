@@ -5,6 +5,7 @@ __pycache__/
 *.mov
 *.mp4
 *.m4v
-outputs
+outputs/
+*_outputs/
 wandb/
 .env

@@ -14,6 +14,7 @@ def make_windows_df() -> pd.DataFrame:
             "label": [0, 1, 0, 2, 1, 2],
             "frac_face_missing": [0.0] * 6,
             "perclos": [0.1, 0.4, 0.2, 0.8, 0.5, 0.9],
+            "ear_mean": [0.30, 0.25, 0.28, 0.15, 0.22, 0.12],
             "bright_mean": [100.0, 110.0, 105.0, 150.0, 120.0, 160.0],
             "warmth_mean": [1.0, 1.1, 1.0, 1.4, 1.2, 1.5],
         }
@@ -23,9 +24,19 @@ def make_windows_df() -> pd.DataFrame:
 def test_available_baselines_reflect_window_schema() -> None:
     specs = baselines.available_baselines(make_windows_df())
 
-    assert [spec.name for spec in specs] == ["majority", "perclos", "luminance"]
+    assert [spec.name for spec in specs] == ["majority", "perclos", "luminance", "logistic_full"]
     assert specs[1].feature_columns == ("perclos",)
     assert specs[2].feature_columns == ("bright_mean", "warmth_mean")
+    assert specs[3].feature_columns == ("perclos", "ear_mean")
+
+
+def test_logistic_full_excludes_luminance_and_quality_columns() -> None:
+    specs = baselines.available_baselines(make_windows_df())
+    full_spec = next(spec for spec in specs if spec.name == "logistic_full")
+
+    excluded = {"subject_id", "video_id", "window_idx", "label", "frac_face_missing"}
+    excluded |= set(baselines.LUMINANCE_CANDIDATE_COLUMNS)
+    assert not excluded.intersection(full_spec.feature_columns)
 
 
 def test_predict_baseline_returns_metadata_and_three_class_probabilities() -> None:

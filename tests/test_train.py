@@ -174,7 +174,13 @@ def test_run_cross_validation_writes_assignment_artifacts(tmp_path) -> None:
     output_names = {path.name for path in output_dir.iterdir()}
     assert expected_outputs.issubset(output_names)
     assert not any(name.endswith("_confusion_matrix.csv") for name in output_names)
-    assert set(results["fold_metrics"]["run"]) == {"majority", "perclos", "luminance", "mlp_regularized"}
+    assert set(results["fold_metrics"]["run"]) == {
+        "majority",
+        "perclos",
+        "luminance",
+        "logistic_full",
+        "mlp_regularized",
+    }
     assert {
         "run",
         "train_loss",
@@ -287,13 +293,14 @@ def test_tracker_receives_one_experiment_lifecycle(tmp_path) -> None:
     assert tracker.finish_calls == 1
     assert tracker.summary_calls == 1
 
-    # log_fold once per (run, fold): 2 folds x (3 baselines + mlp) = 8.
-    assert len(tracker.fold_calls) == 8
+    # log_fold once per (run, fold): 2 folds x (4 baseline-path runs + mlp) = 10.
+    assert len(tracker.fold_calls) == 10
     assert len(tracker.fold_calls) == len(set(tracker.fold_calls))
     assert {run for run, _ in tracker.fold_calls} == {
         "majority",
         "perclos",
         "luminance",
+        "logistic_full",
         "mlp_regularized",
     }
 
@@ -302,7 +309,7 @@ def test_include_mlp_false_has_no_mlp_and_empty_learning_curves(tmp_path) -> Non
     windows_path, output_dir = _write_windows(tmp_path)
     results = _run(windows_path, output_dir, include_mlp=False)
 
-    assert set(results["fold_metrics"]["run"]) == {"majority", "perclos", "luminance"}
+    assert set(results["fold_metrics"]["run"]) == {"majority", "perclos", "luminance", "logistic_full"}
     assert "mlp_regularized" not in set(results["fold_metrics"]["run"])
     # Header-only learning curves keep the contract stable when no MLP ran.
     learning_curves = pd.read_csv(output_dir / "learning_curves.csv")

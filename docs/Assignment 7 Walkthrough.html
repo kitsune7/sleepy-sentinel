@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assignment 7 — A Guided Walkthrough</title>
+<style>
+  :root{
+    --ink:#1a1c22; --muted:#5b6472; --line:#e4e7ec; --bg:#fbfbfc;
+    --panel:#ffffff; --accent:#2f6f4f; --accent-soft:#e8f2ec;
+    --warn:#8a5a00; --warn-soft:#fdf3e0; --blue:#26507a; --blue-soft:#eaf1f8;
+    --good:#1f7a4d; --good-soft:#e6f4ec; --bad:#a3352f; --bad-soft:#fbeceb;
+    --code-bg:#1e2230; --code-ink:#e8ecf5;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    line-height:1.62; font-size:18px;
+  }
+  .wrap{max-width:820px; margin:0 auto; padding:48px 22px 120px;}
+  header.hero{margin-bottom:14px}
+  .kicker{font-family:ui-sans-serif,system-ui,sans-serif; letter-spacing:.14em; text-transform:uppercase; font-size:12px; color:var(--accent); font-weight:700}
+  h1{font-size:40px; line-height:1.12; margin:.25em 0 .1em; font-weight:700}
+  .subtitle{color:var(--muted); font-size:19px; margin:0 0 18px}
+  .meta{font-family:ui-sans-serif,system-ui,sans-serif; font-size:13px; color:var(--muted); border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:10px 0; display:flex; gap:22px; flex-wrap:wrap}
+  .meta b{color:var(--ink)}
+  nav.toc{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px 22px; margin:26px 0 8px; font-family:ui-sans-serif,system-ui,sans-serif}
+  nav.toc h4{margin:0 0 10px; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+  nav.toc ol{margin:0; padding-left:20px}
+  nav.toc li{margin:5px 0}
+  nav.toc a{color:var(--blue); text-decoration:none}
+  nav.toc a:hover{text-decoration:underline}
+  section{margin-top:52px; scroll-margin-top:16px}
+  h2{font-size:28px; margin:0 0 4px; font-weight:700; line-height:1.2}
+  h2 .num{color:var(--accent); font-family:ui-sans-serif,system-ui,sans-serif; font-size:15px; display:block; letter-spacing:.06em; margin-bottom:2px}
+  h3{font-size:20px; margin:30px 0 6px; font-weight:700}
+  p{margin:14px 0}
+  em{font-style:italic}
+  strong{font-weight:700}
+  a{color:var(--blue)}
+  code.inl{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:.86em; background:#eef0f4; padding:1px 6px; border-radius:5px; color:#2a2f3a}
+  pre{
+    background:var(--code-bg); color:var(--code-ink); border-radius:12px;
+    padding:18px 20px; overflow-x:auto; font-size:14px; line-height:1.55;
+    font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    white-space:pre; margin:18px 0; border:1px solid #2a2f42;
+  }
+  pre .c{color:#7d8bb0}    /* comment */
+  pre .k{color:#e0a458}    /* keyword */
+  pre .s{color:#8fd18c}    /* string */
+  pre .f{color:#78b6e8}    /* func/name */
+  pre .n{color:#d98fb8}    /* number */
+  .callout{border-radius:12px; padding:16px 20px; margin:20px 0; font-size:16.5px; font-family:ui-sans-serif,system-ui,sans-serif; line-height:1.55}
+  .callout .lab{font-weight:800; font-size:12px; letter-spacing:.1em; text-transform:uppercase; display:block; margin-bottom:5px}
+  .callout.def{background:var(--accent-soft); border:1px solid #cfe3d7}
+  .callout.def .lab{color:var(--accent)}
+  .callout.key{background:var(--blue-soft); border:1px solid #cfe0f0}
+  .callout.key .lab{color:var(--blue)}
+  .callout.edge{background:var(--warn-soft); border:1px solid #f0e0bf}
+  .callout.edge .lab{color:var(--warn)}
+  figure{margin:26px 0; }
+  figcaption{font-family:ui-sans-serif,system-ui,sans-serif; font-size:13.5px; color:var(--muted); text-align:center; margin-top:10px}
+  .diagram{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:24px 20px}
+  /* pipeline flow */
+  .flow{display:flex; align-items:stretch; gap:0; flex-wrap:wrap; justify-content:center; font-family:ui-sans-serif,system-ui,sans-serif}
+  .node{background:#fff; border:1.5px solid var(--line); border-radius:10px; padding:10px 12px; min-width:118px; text-align:center; box-shadow:0 1px 0 rgba(0,0,0,.02)}
+  .node .t{font-weight:700; font-size:14px}
+  .node .s{font-size:11.5px; color:var(--muted); margin-top:2px}
+  .arrow{display:flex; align-items:center; padding:0 8px; color:var(--accent); font-size:22px; font-weight:700}
+  .arrow small{font-size:10px; color:var(--muted); font-weight:500}
+  .arrowwrap{display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 6px}
+  .arrowwrap .lbl{font-size:10px; color:var(--muted)}
+  /* generic table */
+  table.data{border-collapse:collapse; width:100%; font-family:ui-sans-serif,system-ui,sans-serif; font-size:14px; margin:18px 0}
+  table.data th, table.data td{border:1px solid var(--line); padding:8px 10px; text-align:center}
+  table.data th{background:#f3f5f8; font-weight:700}
+  table.data td.name{text-align:left; font-weight:600}
+  table.data tr.hi td{background:var(--good-soft)}
+  table.data .win{color:var(--good); font-weight:700}
+  table.data .lose{color:var(--bad); font-weight:700}
+  /* confusion matrix */
+  .cmwrap{display:flex; gap:26px; flex-wrap:wrap; justify-content:center}
+  .cm{font-family:ui-sans-serif,system-ui,sans-serif; font-size:13px}
+  .cm h5{text-align:center; margin:0 0 8px; font-size:13px}
+  .cm table{border-collapse:collapse; margin:0 auto}
+  .cm td,.cm th{width:44px; height:40px; text-align:center; border:1px solid var(--line)}
+  .cm th{background:#f3f5f8; font-weight:700; font-size:11px}
+  .cm .diag{background:var(--good-soft); font-weight:700}
+  .cm .corner{background:var(--bad-soft); font-weight:700; color:var(--bad)}
+  .cm .axis{font-size:10px; color:var(--muted); background:#fafbfc}
+  /* bar chart for coefficients */
+  .bars{font-family:ui-sans-serif,system-ui,sans-serif; font-size:13px}
+  .bar-row{display:flex; align-items:center; gap:10px; margin:5px 0}
+  .bar-row .lab{width:130px; text-align:right; color:var(--ink)}
+  .bar-track{flex:1; background:#f0f2f5; border-radius:5px; height:22px; position:relative; overflow:hidden}
+  .bar-fill{height:100%; background:linear-gradient(90deg,#3f8f66,#2f6f4f); border-radius:5px}
+  .bar-fill.dim{background:linear-gradient(90deg,#9db4c6,#7d97ac)}
+  .bar-row .val{width:44px; font-variant-numeric:tabular-nums; color:var(--muted)}
+  /* quiz */
+  .quizblock{margin:26px 0 6px; background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden}
+  .quizblock > h4{margin:0; padding:14px 20px; background:#f5f7f9; border-bottom:1px solid var(--line); font-family:ui-sans-serif,system-ui,sans-serif; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+  .quiz{padding:18px 20px; border-bottom:1px solid var(--line); font-family:ui-sans-serif,system-ui,sans-serif}
+  .quiz:last-child{border-bottom:none}
+  .quiz .q{font-weight:700; font-size:16px; margin-bottom:12px}
+  .quiz .q .qn{color:var(--accent); margin-right:6px}
+  .opt{display:block; width:100%; text-align:left; background:#fff; border:1.5px solid var(--line); border-radius:9px; padding:10px 14px; margin:7px 0; font-size:15px; cursor:pointer; transition:.12s; font-family:inherit; color:var(--ink)}
+  .opt:hover{border-color:#b9c2cf; background:#fafbfc}
+  .opt.correct{border-color:var(--good); background:var(--good-soft)}
+  .opt.wrong{border-color:var(--bad); background:var(--bad-soft)}
+  .opt.reveal-correct{border-color:var(--good); background:var(--good-soft)}
+  .opt .mark{float:right; font-weight:800}
+  .opt.correct .mark::after{content:"✓"; color:var(--good)}
+  .opt.wrong .mark::after{content:"✕"; color:var(--bad)}
+  .fb{margin-top:10px; padding:12px 14px; border-radius:9px; font-size:14.5px; display:none; line-height:1.5}
+  .fb.show{display:block}
+  .fb.ok{background:var(--good-soft); border:1px solid #bfe0cc}
+  .fb.no{background:var(--bad-soft); border:1px solid #edc9c6}
+  .fb b{color:inherit}
+  hr.sep{border:none; border-top:1px solid var(--line); margin:34px 0}
+  .tag{display:inline-block; font-family:ui-sans-serif,system-ui,sans-serif; font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; background:var(--accent-soft); color:var(--accent); vertical-align:middle}
+  .filelist{font-family:ui-sans-serif,system-ui,sans-serif; font-size:14.5px; list-style:none; padding:0; margin:18px 0}
+  .filelist li{padding:11px 14px; border:1px solid var(--line); border-radius:9px; margin:7px 0; background:var(--panel)}
+  .filelist .fn{font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:13px; font-weight:700; color:var(--blue)}
+  .filelist .fd{color:var(--muted); font-size:13.5px; margin-top:3px}
+  .pill{font-family:ui-sans-serif,system-ui,sans-serif; font-size:11px; font-weight:700; padding:1px 7px; border-radius:5px; margin-left:6px}
+  .pill.new{background:var(--good-soft); color:var(--good)}
+  .pill.edit{background:var(--warn-soft); color:var(--warn)}
+  .pill.doc{background:var(--blue-soft); color:var(--blue)}
+  .progress{position:sticky; top:0; height:4px; background:transparent; z-index:50}
+  .progress > div{height:100%; width:0; background:var(--accent); transition:width .1s}
+  .footnote{font-family:ui-sans-serif,system-ui,sans-serif; font-size:13px; color:var(--muted); margin-top:40px; border-top:1px solid var(--line); padding-top:16px}
+</style>
+</head>
+<body>
+<div class="progress"><div id="pbar"></div></div>
+<div class="wrap">
+
+<header class="hero">
+  <div class="kicker">CS 6320 · Portfolio Project · Sleepy Sentinel</div>
+  <h1>Assignment 7, End to End</h1>
+  <p class="subtitle">A guided tour of every change, the reasoning behind it, and how it all becomes the thing you submit.</p>
+  <div class="meta">
+    <span><b>Part A</b> Modeling progress</span>
+    <span><b>Part B</b> Transfer-learning relevance</span>
+    <span><b>Headline</b> Full-feature logistic beats PERCLOS</span>
+    <span><b>Due</b> Jul 7, 11:59pm</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <h4>What we'll walk through</h4>
+  <ol>
+    <li><a href="#s1">The assignment, and the project it lives inside</a></li>
+    <li><a href="#s2">From video to a table of numbers</a></li>
+    <li><a href="#s3">Honest evaluation: leakage, LOSO, and the metrics</a></li>
+    <li><a href="#s4">The experiment: adding one honest contender</a></li>
+    <li><a href="#s5">The results: did it beat PERCLOS?</a></li>
+    <li><a href="#s6">Opening the box: what the model actually leans on</a></li>
+    <li><a href="#s7">Part B: is transfer learning even relevant here?</a></li>
+    <li><a href="#s8">What you're turning in</a></li>
+  </ol>
+</nav>
+
+<!-- ============================ SECTION 1 ============================ -->
+<section id="s1">
+  <h2><span class="num">Section 1</span>The assignment, and the project it lives inside</h2>
+
+  <p>Every assignment in this course is a slice of one long project. So before we look at what changed this week, it's worth being clear about two separate things that are easy to blur together: what <em>Assignment 7</em> asks of you, and what the <em>project</em> is trying to do. The assignment is the frame; the project is the picture.</p>
+
+  <p>The project is called <strong>Sleepy Sentinel</strong>. The goal is modest and personal: given a short clip of someone at their webcam, guess whether they look <em>alert</em>, <em>low-vigilant</em>, or <em>drowsy</em>. Not a medical device, not a driver-safety system — a self-monitoring aid, where the worst case of a wrong answer is a mistimed nudge to take a break. That framing matters, because it sets how careful we need to be and what counts as "good enough."</p>
+
+  <p>The three states are ordered. Alert, then low-vigilant, then drowsy: a slide from wide awake toward asleep. This ordering is not decoration. It changes what a mistake <em>costs</em>. Confusing alert with low-vigilant is a small slip; confusing alert with drowsy is a serious one. Hold onto that idea — it comes back the moment we start measuring success.</p>
+
+  <div class="callout def">
+    <span class="lab">Definition · Ordinal target</span>
+    The label <code class="inl">y ∈ {0, 1, 2}</code> is <em>ordinal</em>: the classes have a natural order (alert &lt; low-vigilant &lt; drowsy), but the gaps between them aren't guaranteed to be equal. This sits between a plain category (no order) and a real number (order <em>and</em> measured distance).
+  </div>
+
+  <p>Now the assignment. Assignment 7 has a deliberately narrow shape, and reading it closely saves you from doing the wrong work well. It asks for two things:</p>
+
+  <div class="diagram">
+    <div style="display:flex; gap:18px; flex-wrap:wrap">
+      <div style="flex:1; min-width:260px; border:1.5px solid #cfe3d7; border-radius:10px; padding:14px 16px; background:var(--accent-soft)">
+        <div style="font-family:ui-sans-serif,system-ui,sans-serif; font-weight:800; color:var(--accent); font-size:13px; letter-spacing:.06em; text-transform:uppercase">Part A · ~3–4 hrs</div>
+        <div style="font-family:ui-sans-serif,system-ui,sans-serif; font-weight:700; margin:4px 0 4px">Portfolio modeling progress</div>
+        <div style="font-family:ui-sans-serif,system-ui,sans-serif; font-size:14px; color:var(--muted)">Run <em>one</em> focused experiment that advances the plan from Assignment 6. Report it against a prior baseline, with evidence beyond a single score.</div>
+      </div>
+      <div style="flex:1; min-width:260px; border:1.5px solid #cfe0f0; border-radius:10px; padding:14px 16px; background:var(--blue-soft)">
+        <div style="font-family:ui-sans-serif,system-ui,sans-serif; font-weight:800; color:var(--blue); font-size:13px; letter-spacing:.06em; text-transform:uppercase">Part B · ~1–2 hrs</div>
+        <div style="font-family:ui-sans-serif,system-ui,sans-serif; font-weight:700; margin:4px 0 4px">Transfer-learning relevance</div>
+        <div style="font-family:ui-sans-serif,system-ui,sans-serif; font-size:14px; color:var(--muted)">Week 7 covered CNNs and pretrained vision models. Decide — with evidence — whether they belong in <em>this</em> project, or whether adopting them would just be cargo-culting the lecture.</div>
+      </div>
+    </div>
+  </div>
+
+  <p>The most important sentence in the whole assignment is the one telling you what <em>not</em> to do: don't add a pretrained image model just because it was on the syllabus. The graded skill this week is <em>judgment</em> — making a defensible model choice and saying honestly what the evidence does and doesn't support. A result of "the simpler thing still wins, and here's the proof" is a strong submission, not a failed one.</p>
+
+  <p>Which brings us to where Assignment 6 left off. Last week established the field of players, all measured the same way:</p>
+
+  <table class="data">
+    <thead><tr><th>Model</th><th>QWK</th><th>What it is</th></tr></thead>
+    <tbody>
+      <tr><td class="name">Majority</td><td>0.000</td><td>Always guesses the most common class. The floor.</td></tr>
+      <tr><td class="name">Luminance-only</td><td>0.048</td><td>Uses only brightness. A trap detector (see §3).</td></tr>
+      <tr><td class="name">PERCLOS-only</td><td class="win">0.410</td><td>One feature: how long the eyes are closed. The one to beat.</td></tr>
+      <tr><td class="name">Regularized MLP</td><td>0.363</td><td>A neural net on all ~17 features. Did <em>not</em> beat PERCLOS.</td></tr>
+    </tbody>
+  </table>
+
+  <p>That last row is the puzzle Assignment 6 handed forward. A neural network with seventeen features lost to a logistic model with <em>one</em>. Either the extra sixteen features carry no real signal, or the MLP was the wrong tool for extracting it. Assignment 6 wrote down the exact next experiment to settle this, and Part A of this week is simply carrying it out. We'll get there in Section 4 — but first we need to understand where those numbers even come from.</p>
+
+  <div class="quizblock">
+    <h4>Check your understanding — Section 1</h4>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q1.</span>Why does the ordering of the three classes (alert &lt; low-vigilant &lt; drowsy) matter for the project?</div>
+      <button class="opt" data-correct="false" data-fb="Interpretability is a nice property, but it isn't what the ordering buys you — a plain unordered classifier can be interpretable too.">It makes the model easier to interpret.</button>
+      <button class="opt" data-correct="true" data-fb="Exactly. Because the classes are ordered, some mistakes are worse than others: alert↔drowsy spans two steps and is far more costly than alert↔low-vigilant. The evaluation has to reflect that.">It means some mistakes are worse than others — a two-step error costs more than a one-step error.</button>
+      <button class="opt" data-correct="false" data-fb="The ordering doesn't change class frequencies. In fact each subject contributes exactly one video per class, so the data is already balanced.">It guarantees the classes are balanced in the dataset.</button>
+      <button class="opt" data-correct="false" data-fb="Ordering the labels doesn't add or remove features. The inputs are the same geometric measurements regardless of how labels are arranged.">It lets the model use more input features.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q2.</span>According to the assignment, which of these would be the <em>weakest</em> submission?</div>
+      <button class="opt" data-correct="false" data-fb="This is actually a strong outcome. 'Simpler-and-equal wins' with honest evidence is exactly what the assignment rewards.">Showing that a simpler model still wins and explaining why.</button>
+      <button class="opt" data-correct="true" data-fb="Right. The assignment explicitly warns against adopting a pretrained vision model just because it was covered in class. Doing so without evidence is the anti-pattern it's designed to catch.">Adopting a pretrained CNN mainly because Week 7 covered CNNs.</button>
+      <button class="opt" data-correct="false" data-fb="This is core Part A work — one focused experiment compared to a prior baseline is exactly what's asked.">Running one focused experiment and comparing it to a prior baseline.</button>
+      <button class="opt" data-correct="false" data-fb="Naming what evidence you still lack is explicitly praised — it's how you set up Assignment 8's decision.">Stating honestly what evidence is still missing.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q3.</span>What is the central puzzle Assignment 6 handed to Assignment 7?</div>
+      <button class="opt" data-correct="false" data-fb="Luminance-only scored near zero (0.048) — that was a reassuring result, not a puzzle. It showed the model isn't just reading brightness.">That the luminance-only baseline scored surprisingly high.</button>
+      <button class="opt" data-correct="true" data-fb="Correct. A 17-feature neural net (QWK 0.363) lost to a one-feature logistic model (0.410). Either the extra features are noise, or the MLP was the wrong way to use them.">That a 17-feature neural net lost to a one-feature logistic model.</button>
+      <button class="opt" data-correct="false" data-fb="The data was fine and fully labeled — the charter says no fallback was needed. The tension was about models, not data availability.">That the dataset turned out to be unusable.</button>
+      <button class="opt" data-correct="false" data-fb="The majority baseline behaved exactly as expected (QWK 0, accuracy 33%). No surprise there.">That the majority baseline unexpectedly beat everything.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q4.</span>How is the Sleepy Sentinel project scoped in terms of stakes?</div>
+      <button class="opt" data-correct="false" data-fb="The charter is explicit that this is NOT a safety-critical or medical device. Treating it as one would overclaim.">As a safety-critical driver-monitoring system.</button>
+      <button class="opt" data-correct="false" data-fb="No clinical use is claimed. Framing it medically would trigger a much higher evidence bar than the project targets.">As a medical diagnostic tool for sleep disorders.</button>
+      <button class="opt" data-correct="true" data-fb="Yes. It's a personal self-monitoring aid where a wrong answer means a mistimed break, not harm. That low-stakes framing shapes what counts as good enough.">As a personal self-monitoring aid, not safety-critical.</button>
+      <button class="opt" data-correct="false" data-fb="There's no third party being monitored. The charter rules out surveillance use; it's self-monitoring with consent.">As a workplace tool for monitoring employees.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q5.</span>Part A asks for "evidence beyond a single aggregate score." Why insist on that?</div>
+      <button class="opt" data-correct="false" data-fb="More metrics don't automatically mean a higher headline score — and chasing the score is exactly what the scope boundary warns against.">Because more numbers always make a model look better.</button>
+      <button class="opt" data-correct="true" data-fb="Right. A single average can hide where a model fails — a confusion matrix or per-class recall reveals, say, that one class is at chance even when the overall number looks fine.">Because one number can hide where a model actually fails — like a class stuck at chance.</button>
+      <button class="opt" data-correct="false" data-fb="Aggregate scores are required, not forbidden. The point is to supplement them, not replace them.">Because aggregate scores are not allowed in the course.</button>
+      <button class="opt" data-correct="false" data-fb="The evaluation procedure was fixed back in Assignment 5 and deliberately kept unchanged. Extra evidence is about understanding results, not redesigning the metric.">Because it forces you to change the evaluation metric each week.</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ SECTION 2 ============================ -->
+<section id="s2">
+  <h2><span class="num">Section 2</span>From video to a table of numbers</h2>
+
+  <p>The raw material of this project is video — about 30 hours of it, roughly 111 gigabytes, sixty people each recorded three times. You cannot feed that to a logistic regression, and you would not want to. The first and most consequential design decision in the whole project happens before any model is trained: turning moving pictures into a tidy table of numbers.</p>
+
+  <p>Think of it as a funnel. A video is a flipbook of frames. Each frame gets a face read off it. Those per-frame readings are noisy and fast, so we summarize them over short windows of time. And each window becomes one row in a spreadsheet, with about seventeen columns. That table is what every model in this project — the floors, PERCLOS, the MLP, and this week's new contender — actually sees.</p>
+
+  <figure>
+    <div class="diagram">
+      <div class="flow">
+        <div class="node"><div class="t">Video</div><div class="s">~10 min clip<br>≤30 fps</div></div>
+        <div class="arrowwrap"><div class="arrow">→</div><div class="lbl">per frame</div></div>
+        <div class="node"><div class="t">MediaPipe</div><div class="s">face landmarks<br>+ blendshapes</div></div>
+        <div class="arrowwrap"><div class="arrow">→</div><div class="lbl">geometry</div></div>
+        <div class="node"><div class="t">Per-frame<br>signals</div><div class="s">EAR, jaw open,<br>head angle…</div></div>
+        <div class="arrowwrap"><div class="arrow">→</div><div class="lbl">summarize</div></div>
+        <div class="node"><div class="t">Windows</div><div class="s">~17 features<br>per window</div></div>
+        <div class="arrowwrap"><div class="arrow">→</div><div class="lbl">a row each</div></div>
+        <div class="node" style="border-color:var(--accent)"><div class="t">Table</div><div class="s">14,718 rows<br>→ models</div></div>
+      </div>
+    </div>
+    <figcaption>The extraction funnel. Each stage throws away detail on purpose, keeping only what should carry a fatigue signal.</figcaption>
+  </figure>
+
+  <p>The workhorse in the second box is <strong>MediaPipe's face landmarker</strong> — a pretrained model from Google that finds a mesh of facial points and a set of "blendshape" scores (how open the jaw is, how closed each eye is) on a single face. Notice what it gives us: not pixels, but <em>geometry</em>. Where the eyelids are. How the jaw hangs. Which way the head tilts. This choice will turn out to matter enormously in Part B, so tuck it away: the project already runs a pretrained vision model — it just consumes the model's geometric outputs rather than raw images.</p>
+
+  <p>From that geometry we compute a handful of intuitive per-frame signals. The most important is the <strong>Eye Aspect Ratio (EAR)</strong> — the height of the eye opening divided by its width. When your eyes are wide open, EAR is large; as your lids droop, it shrinks toward zero. A blink is a brief dip; drowsiness is EAR staying low for longer stretches.</p>
+
+  <div class="callout def">
+    <span class="lab">Definition · PERCLOS</span>
+    <strong>PER</strong>centage of eye <strong>CLOS</strong>ure — the fraction of time within a window that the eyes are more closed than a threshold. It is the single most established drowsiness signal in the literature, and in this project a one-feature model built on it is the reference every other model has to beat.
+  </div>
+
+  <p>Now the subtle part: a single frame is a terrible unit of analysis. At any instant your eyes might just be mid-blink. So instead of asking "is this <em>frame</em> drowsy," we slide a <strong>window</strong> over the video — a few seconds of frames — and summarize the behavior inside it. From one window we compute things like the <em>average</em> EAR, its <em>variability</em> (<code class="inl">ear_std</code>), how <em>often</em> blinks happen (<code class="inl">blink_rate</code>), how <em>long</em> the longest blink lasted (<code class="inl">blink_dur_max</code>), how many yawns occurred, and how much the head drifted. Roughly seventeen such summaries make up one row.</p>
+
+  <p>Here is a caricature of what a single row looks like for a wide-awake window versus a drowsy one. Real values are normalized and standardized, but the <em>direction</em> of each difference is what your intuition should latch onto:</p>
+
+  <pre><span class="c"># One window = one row. (Illustrative values, not raw dataset numbers.)</span>
+                    alert window      drowsy window
+  perclos             <span class="n">0.08</span>              <span class="n">0.62</span>      <span class="c"># eyes closed 8% vs 62% of the time</span>
+  ear_mean            <span class="n">0.29</span>              <span class="n">0.14</span>      <span class="c"># lids more open when alert</span>
+  ear_std             <span class="n">0.03</span>              <span class="n">0.11</span>      <span class="c"># droop-and-jerk makes EAR wobble</span>
+  blink_rate          <span class="n">0.20</span>              <span class="n">0.55</span>      <span class="c"># more frequent, heavier blinks</span>
+  blink_dur_max       <span class="n">0.12</span>              <span class="n">0.80</span>      <span class="c"># longest blink is much longer</span>
+  yawn_count          <span class="n">0</span>                 <span class="n">2</span>
+  frac_head_down      <span class="n">0.02</span>              <span class="n">0.35</span>      <span class="c"># the nod</span>
+  label               <span class="n">0</span> (alert)         <span class="n">2</span> (drowsy)</pre>
+
+  <p>Two columns in that neighborhood are deliberately <em>held out</em> of the models: brightness (<code class="inl">bright_mean</code>, <code class="inl">warmth</code>) and a data-quality flag (<code class="inl">frac_face_missing</code>). The brightness columns exist only to build a "trap" baseline — more on that in the next section — and the quality flag is a diagnostic, not a fatigue cue. Keeping them out of the real models is a rule written into the project charter, and honoring it will matter when we write this week's code.</p>
+
+  <div class="callout edge">
+    <span class="lab">Edge case · Missing faces are not closed eyes</span>
+    If MediaPipe fails to find a face in a frame (someone looks away, the lighting dies), that frame is marked <em>missing</em> — never silently treated as "eyes closed." A window with more than 30% missing frames is dropped entirely; short gaps under about a third of a second are interpolated. Confusing "no data" with "eyes shut" would manufacture fake drowsiness.
+  </div>
+
+  <p>Why go to all this trouble instead of feeding video straight into a neural network? Three reasons, each of which the project can now defend with evidence. It collapses 111&nbsp;GB into a 2&nbsp;MB table you can experiment on in seconds. It strips away appearance — skin tone, background, camera — keeping only motion geometry, which guards against a model that secretly learns faces instead of fatigue. And it makes every feature something you can name and reason about, so when a model works you can say <em>why</em>. The cost, which we'll confront honestly in Section 6, is that squeezing time into per-window averages may discard exactly the temporal pattern that distinguishes true drowsiness.</p>
+
+  <div class="quizblock">
+    <h4>Check your understanding — Section 2</h4>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q1.</span>What does one <em>row</em> in the model's input table correspond to?</div>
+      <button class="opt" data-correct="false" data-fb="A single frame is too noisy to be the unit — at any instant the eyes might just be mid-blink. That's the whole reason for windowing.">A single video frame.</button>
+      <button class="opt" data-correct="true" data-fb="Correct. A row summarizes a short window of frames — averages, variability, and counts of behaviors over a few seconds.">A short window of frames, summarized into ~17 features.</button>
+      <button class="opt" data-correct="false" data-fb="A whole video is the unit of the final prediction, but not of a row. Videos are aggregated up from many window-rows (we'll see this in §3).">One entire video.</button>
+      <button class="opt" data-correct="false" data-fb="Subjects aren't rows — each subject contributes many windows across their three videos.">One subject.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q2.</span>Eye Aspect Ratio (EAR) tends to do what as a person gets drowsy?</div>
+      <button class="opt" data-correct="true" data-fb="Right. EAR is eye-opening height over width; drooping lids shrink it. Sustained low EAR (not just a blink) is a drowsiness cue.">Decrease, as the eyelids droop and the opening narrows.</button>
+      <button class="opt" data-correct="false" data-fb="It's the opposite — wide-open alert eyes give a large EAR; drowsy droop lowers it.">Increase, because tired eyes open wider.</button>
+      <button class="opt" data-correct="false" data-fb="EAR is a geometric ratio of eye landmarks; it isn't tied to skin brightness. That would be the luminance signal, deliberately kept out.">Stay fixed regardless of state; only brightness changes.</button>
+      <button class="opt" data-correct="false" data-fb="EAR is computed from face geometry, not head angle. Head drift is captured by separate pitch/roll features.">Depend only on head angle, not the eyes.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q3.</span>MediaPipe's face landmarker hands the pipeline mainly what?</div>
+      <button class="opt" data-correct="false" data-fb="Raw pixels are exactly what the pipeline avoids passing downstream — that's the point of extracting geometry.">Raw pixel crops of the face.</button>
+      <button class="opt" data-correct="true" data-fb="Yes — landmark geometry and blendshape scores (eye closure, jaw openness), from which the numeric features are computed. This is pretrained feature extraction, which becomes central in Part B.">Geometric landmarks and blendshape scores, not pixels.</button>
+      <button class="opt" data-correct="false" data-fb="MediaPipe doesn't output a drowsiness label — it outputs geometry. The models built downstream produce the label.">A finished drowsiness prediction.</button>
+      <button class="opt" data-correct="false" data-fb="It doesn't return audio; the project is purely visual/geometric.">An audio transcript of the clip.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q4.</span>Why are <code class="inl">bright_mean</code> and <code class="inl">warmth</code> deliberately kept out of the real models?</div>
+      <button class="opt" data-correct="false" data-fb="They're perfectly easy to compute — cost isn't the issue. The issue is what they'd let the model cheat on.">They are too expensive to compute per frame.</button>
+      <button class="opt" data-correct="true" data-fb="Right. They're reserved to build a luminance 'trap' baseline. If the real model needed brightness to win, it would be partly a lighting detector, not a fatigue detector.">They're reserved for a luminance trap baseline that tests for a lighting shortcut.</button>
+      <button class="opt" data-correct="false" data-fb="They're numeric like everything else — format isn't the reason. The reason is guarding against a confound.">They are text fields the model can't read.</button>
+      <button class="opt" data-correct="false" data-fb="They aren't labels; they're candidate inputs. They're excluded to keep the model honest, not because they leak the answer directly.">They are copies of the label.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q5.</span>What is the main <em>risk</em> the tabular representation introduces — the one Section 6 will revisit?</div>
+      <button class="opt" data-correct="false" data-fb="Size is a benefit here, not a risk — 111 GB shrinks to a 2 MB table. The concern is about information, not storage.">The table is too large to fit in memory.</button>
+      <button class="opt" data-correct="true" data-fb="Exactly. Averaging behavior within each window can discard the temporal pattern — how blink behavior evolves over time — which may be exactly what separates the states.">Squeezing time into per-window summaries may discard the temporal pattern that distinguishes the states.</button>
+      <button class="opt" data-correct="false" data-fb="Stripping appearance is a deliberate safeguard against learning identity, not a risk. It's a feature of the design.">It removes appearance information, which the model needs to recognize faces.</button>
+      <button class="opt" data-correct="false" data-fb="Interpretability improves with named features — that's an upside of the tabular choice, not a risk.">It makes the features impossible to interpret.</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ SECTION 3 ============================ -->
+<section id="s3">
+  <h2><span class="num">Section 3</span>Honest evaluation: leakage, LOSO, and the metrics</h2>
+
+  <p>Here is a way to fool yourself into thinking you have a great model. Take your sixty people, pour all their windows into one pile, shuffle, and split off some for testing. Your accuracy will look wonderful — and it will be a lie. The reason is that windows from the <em>same person</em> are deeply alike. If some of Alice's windows train the model and others test it, the model can succeed by recognizing <em>Alice</em>, not by recognizing drowsiness. Come deployment, facing a stranger, it collapses.</p>
+
+  <div class="callout key">
+    <span class="lab">Key concept · Subject leakage</span>
+    When data from the same individual appears in both training and test, a model can score well by memorizing the individual rather than learning the target concept. The defense is to split <em>by person</em>, never by row — so no one appears on both sides.
+  </div>
+
+  <p>The strictest honest test of "will this work on someone new?" is <strong>Leave-One-Subject-Out</strong> cross-validation, or LOSO. Train on 59 people; test on the 1 you held out; write down the score. Then do it again holding out a different person. Sixty times over, until every subject has taken exactly one turn as the unseen stranger. Your reported number is the average across those sixty trials, and the spread across them tells you how much it depends on <em>who</em> the stranger is.</p>
+
+  <figure>
+    <div class="diagram">
+      <div style="font-family:ui-sans-serif,system-ui,sans-serif; font-size:13px">
+        <div style="display:flex; gap:4px; align-items:center; margin-bottom:8px">
+          <span style="width:70px; color:var(--muted)">Fold 1</span>
+          <span style="background:var(--accent-soft); border:1px solid #cfe3d7; border-radius:5px; padding:5px 9px">train: subjects 2–60</span>
+          <span style="background:var(--bad-soft); border:1px solid #edc9c6; border-radius:5px; padding:5px 9px; color:var(--bad); font-weight:700">test: subject 1</span>
+        </div>
+        <div style="display:flex; gap:4px; align-items:center; margin-bottom:8px">
+          <span style="width:70px; color:var(--muted)">Fold 2</span>
+          <span style="background:var(--accent-soft); border:1px solid #cfe3d7; border-radius:5px; padding:5px 9px">train: 1, 3–60</span>
+          <span style="background:var(--bad-soft); border:1px solid #edc9c6; border-radius:5px; padding:5px 9px; color:var(--bad); font-weight:700">test: subject 2</span>
+        </div>
+        <div style="display:flex; gap:4px; align-items:center; margin-bottom:8px; color:var(--muted)">
+          <span style="width:70px">⋮</span><span>⋮ &nbsp; (60 folds total)</span>
+        </div>
+        <div style="display:flex; gap:4px; align-items:center">
+          <span style="width:70px; color:var(--muted)">Fold 60</span>
+          <span style="background:var(--accent-soft); border:1px solid #cfe3d7; border-radius:5px; padding:5px 9px">train: subjects 1–59</span>
+          <span style="background:var(--bad-soft); border:1px solid #edc9c6; border-radius:5px; padding:5px 9px; color:var(--bad); font-weight:700">test: subject 60</span>
+        </div>
+      </div>
+    </div>
+    <figcaption>LOSO: sixty separate experiments, each testing on a person the model has never seen. The final score is the mean; the spread across folds is the honesty tax.</figcaption>
+  </figure>
+
+  <p>LOSO buys honesty at a price. Each held-out subject has only three videos, so each fold's score is quantized and jumpy, and the standard deviation across folds is large — you'll see bands like <code class="inl">± 0.38</code> next to a mean of <code class="inl">0.48</code>. That width is not a flaw in the method; it is an accurate confession that with sixty people, you genuinely cannot tell close models apart with confidence. Keeping that humility in view is part of the graded skill.</p>
+
+  <p>Two more leaks are sealed off in code, and it is worth knowing they exist because this week's experiment inherits them for free. The <code class="inl">StandardScaler</code> that puts features on a common scale is fit <em>only</em> on the training people, then applied to the test person — otherwise the test data would whisper its statistics into training. And per-subject EAR normalization uses only that subject's own frames, never their alert video as a cheat-sheet baseline that wouldn't exist at deployment.</p>
+
+  <h3>Scoring an ordinal problem</h3>
+
+  <p>Now, how do we turn predictions into a number? Plain accuracy — fraction correct — is tempting but blind to the ordering we cared about in Section 1. To accuracy, calling a drowsy clip "alert" is exactly as wrong as calling it "low-vigilant." But we agreed those mistakes are not equal. We need a metric that knows the classes live on a line.</p>
+
+  <div class="callout def">
+    <span class="lab">Definition · Quadratic Weighted Kappa (QWK)</span>
+    QWK is the project's headline metric. It scores agreement between predicted and true ordinal labels while penalizing mistakes by the <em>square</em> of how many steps off they are: a one-step miss costs a little, a two-step miss (alert↔drowsy) costs four times as much. It's scaled so that <strong>1.0</strong> is perfect, <strong>0.0</strong> is no better than chance guessing, and negative is worse than chance.
+  </div>
+
+  <p>A companion metric, <strong>rank-MAE</strong>, is the average number of steps by which predictions miss — lower is better, and it reads in the same units as the labels (a rank-MAE of 0.57 means "off by about half a class on average"). Where QWK punishes big misses disproportionately, rank-MAE reports the plain average distance. Watching both keeps you honest: a model can nudge one without the other.</p>
+
+  <p>One last mechanical step ties the two halves of the funnel together. Models predict per <em>window</em>, but the thing we actually care about is the <em>video</em>. So for each video we average the window-level class probabilities and take the most likely class as the video's prediction. Scores are always computed at the video level — 180 videos, three per held-out subject — because that's the real unit of the decision.</p>
+
+  <pre><span class="c"># window predictions  ->  one prediction per video</span>
+video 03/10  windows: [drowsy, drowsy, alert, drowsy, low-vig, drowsy, ...]
+             mean prob = {alert: 0.18, low-vig: 0.22, drowsy: <span class="n">0.60</span>}
+             <span class="k">=></span> predicted label = drowsy   <span class="c"># argmax of the averaged probabilities</span></pre>
+
+  <p>With this scaffolding — split by person, seal the leaks, score on the ordinal line, aggregate to videos — we finally have a fair courtroom. Any model we drop in is judged by exactly the same rules as every model before it. That is precisely what makes this week's comparison trustworthy, so let's introduce the new contender.</p>
+
+  <div class="quizblock">
+    <h4>Check your understanding — Section 3</h4>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q1.</span>Why is splitting the data <em>by person</em> (rather than by row) essential here?</div>
+      <button class="opt" data-correct="true" data-fb="Correct. Windows from one person are highly correlated; if they straddle train and test, the model can win by recognizing the individual instead of the fatigue state.">Otherwise a model can score well by memorizing individuals instead of learning drowsiness.</button>
+      <button class="opt" data-correct="false" data-fb="Row-wise splitting is actually faster and simpler. The reason to avoid it is validity, not speed.">Because per-person splitting runs faster.</button>
+      <button class="opt" data-correct="false" data-fb="The data is already class-balanced (one video per class per subject); balance isn't what per-person splitting fixes.">Because it balances the classes.</button>
+      <button class="opt" data-correct="false" data-fb="Splitting strategy doesn't change how many features exist. It changes who appears on which side of the split.">Because it increases the number of features available.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q2.</span>In LOSO with 60 subjects, how many separate train/test cycles run?</div>
+      <button class="opt" data-correct="false" data-fb="One split would be a single holdout, not LOSO. LOSO rotates the held-out subject through every person.">One.</button>
+      <button class="opt" data-correct="false" data-fb="Five folds would be grouped K-fold, an option in the code — but LOSO holds out one subject at a time.">Five.</button>
+      <button class="opt" data-correct="true" data-fb="Right — 60 folds, each holding out exactly one of the 60 subjects as the unseen stranger, then averaged.">Sixty.</button>
+      <button class="opt" data-correct="false" data-fb="180 is the number of videos (60 subjects × 3), and the number of video-level test predictions — but the number of folds is 60.">One hundred eighty.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q3.</span>Why does QWK penalize an alert↔drowsy mistake more than an alert↔low-vigilant mistake?</div>
+      <button class="opt" data-correct="false" data-fb="It's not about frequency — QWK's weighting is about the distance between ranks, not how often a class appears.">Because drowsy videos are rarer in the dataset.</button>
+      <button class="opt" data-correct="true" data-fb="Yes. QWK weights errors by the square of the number of ordinal steps, so a two-step miss costs four times a one-step miss.">Because it weights errors by the square of how many ordinal steps they span.</button>
+      <button class="opt" data-correct="false" data-fb="QWK doesn't privilege one class's accuracy; it scores overall ordinal agreement with distance-based penalties.">Because it only measures accuracy on the drowsy class.</button>
+      <button class="opt" data-correct="false" data-fb="Plain accuracy is the metric that treats all mistakes equally — that's exactly the blindness QWK is chosen to fix.">Because it treats every mistake as equally bad.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q4.</span>The <code class="inl">StandardScaler</code> is fit on the training subjects only. What leak does that prevent?</div>
+      <button class="opt" data-correct="true" data-fb="Correct. Fitting the scaler on all data would let the test set's statistics (its mean and spread) influence preprocessing — a subtle form of test information bleeding into training.">The test set's own statistics quietly influencing preprocessing.</button>
+      <button class="opt" data-correct="false" data-fb="Scaling doesn't reveal labels directly; it standardizes feature values. The leak it prevents is statistical, via the mean/variance used to scale.">The label being copied into a feature.</button>
+      <button class="opt" data-correct="false" data-fb="The scaler doesn't move data between people — that's what the subject-wise split handles. It prevents test statistics from leaking through preprocessing.">Windows moving between subjects.</button>
+      <button class="opt" data-correct="false" data-fb="Missing faces are handled separately by the validity gate and imputation, not by the scaler.">Missing frames being treated as closed eyes.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q5.</span>Why are the wide fold bands (e.g. ± 0.38) described as a feature of LOSO rather than a bug?</div>
+      <button class="opt" data-correct="false" data-fb="The bands aren't a coding mistake — they're an honest reflection of how much the score depends on which subject is held out.">They indicate a bug in the fold-splitting code.</button>
+      <button class="opt" data-correct="true" data-fb="Right. With only 60 people and 3 videos each, the score genuinely varies by who's held out. The wide band is an honest confession that close models are hard to separate.">They honestly reflect that with only 60 subjects, close models genuinely can't be told apart with confidence.</button>
+      <button class="opt" data-correct="false" data-fb="A wide band signals uncertainty, not a high score. It says 'be careful drawing strong conclusions,' not 'this model is great.'">They prove the model is performing extremely well.</button>
+      <button class="opt" data-correct="false" data-fb="The metric isn't broken — QWK is behaving correctly. The width comes from small per-fold sample sizes, which is expected.">They mean QWK is the wrong metric and should be replaced.</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ SECTION 4 ============================ -->
+<section id="s4">
+  <h2><span class="num">Section 4</span>The experiment: adding one honest contender</h2>
+
+  <p>We've now assembled everything the experiment stands on: a table of geometric features, a fair courtroom that splits by person and scores on the ordinal line, and a leaderboard where PERCLOS-only quietly leads. Assignment 6 ended by writing down the single next move, almost as a dare:</p>
+
+  <div class="callout key">
+    <span class="lab">The Assignment 6 dare</span>
+    "Test whether the full feature set can beat PERCLOS with a <em>simpler, interpretable</em> tabular model, using the exact same LOSO folds. If it cannot beat PERCLOS, keep PERCLOS."
+  </div>
+
+  <p>Read that carefully, because it quietly reframes the puzzle. Last week's loser was a neural net — a model with plenty of <em>capacity</em>. The natural reflex after a neural net underperforms is to reach for a bigger one. Assignment 6 refuses that reflex. It asks instead: what if the MLP's problem was never too little capacity, but too <em>much</em> — sixty subjects is thin data, and a flexible model overfits thin data. A plain multinomial logistic regression on the same seventeen features has almost no capacity to overfit. If it can beat PERCLOS where the MLP couldn't, the lesson is about the right <em>kind</em> of model for the data, not the right <em>size</em>.</p>
+
+  <div class="callout def">
+    <span class="lab">Definition · Multinomial logistic regression</span>
+    A linear model that, for each of the three classes, learns one weight per feature, then turns the weighted sums into class probabilities. No hidden layers, no nonlinearity — just "how much does each feature push toward each class." Its transparency is the point: after training you can read the weights and see what it relies on (Section 6).
+  </div>
+
+  <h3>How the code is structured — and why the change is small</h3>
+
+  <p>The nicest thing about a well-built pipeline is that a new experiment costs almost no new code. The training loop doesn't know or care what a "baseline" is; it just asks each model to produce, for every window, three class probabilities. Everything after that — aggregating windows into videos, scoring, saving — is shared. So a baseline is described not by a class or a subclass, but by a tiny record: a name, and the list of feature columns it's allowed to look at.</p>
+
+  <pre><span class="k">@dataclass</span>(frozen=<span class="k">True</span>)
+<span class="k">class</span> <span class="f">BaselineSpec</span>:
+    name: str
+    feature_columns: tuple[str, ...] = ()</pre>
+
+  <p>PERCLOS-only is just <code class="inl">BaselineSpec("perclos", ("perclos",))</code> — one feature. Luminance-only is the same idea pointed at the brightness columns. The floor model, majority, has an empty feature list and simply predicts the most common class. The experiment this week is, at heart, one more line in the list of available baselines: <em>the same logistic machinery, but handed every legitimate feature instead of one.</em></p>
+
+  <pre><span class="c"># src/training/baselines.py  — the one meaningful addition</span>
+full_feature_columns = <span class="f">tuple</span>(
+    col <span class="k">for</span> col <span class="k">in</span> windows_df.columns
+    <span class="k">if</span> col <span class="k">not in</span> NON_MODEL_INPUT_COLUMNS
+)
+<span class="k">if</span> <span class="f">len</span>(full_feature_columns) &gt; <span class="n">1</span>:
+    baselines.append(<span class="f">BaselineSpec</span>(<span class="s">"logistic_full"</span>, full_feature_columns))</pre>
+
+  <p>Notice the guard: <code class="inl">NON_MODEL_INPUT_COLUMNS</code>. This is where Section 2's charter rule becomes code. That set names everything the full-feature model must <em>not</em> see — the identifiers, the label, the data-quality flag, and crucially the four luminance columns reserved for the trap baseline. Getting this right is what makes the comparison fair: <code class="inl">logistic_full</code> gets the eighteen legitimate fatigue features, and not one brightness column that would let it cheat the way the luminance baseline is designed to catch.</p>
+
+  <div class="callout edge">
+    <span class="lab">Edge case · A quiet bug this surfaced</span>
+    Writing the explicit exclusion set revealed that last week's <em>MLP</em> never applied it — its feature path excluded only IDs and the label, so it silently trained on the four luminance columns too (22 features, not the charter's 18). Because luminance-only scores near chance, the practical effect is likely harmless noise rather than leakage — but it means the A6 MLP comparison carries a caveat, and it's flagged in the memo's blocker section to fix before any future neural run. Finding this is itself a Part A deliverable: "identify one blocker or uncertainty in your modeling process."
+  </div>
+
+  <p>Everything else the run needs, it already had. The same <code class="inl">folds.json</code>, the same seed of 42, the same train-only scaler, the same window-to-video aggregation. Because the logistic path runs inside scikit-learn with a fixed seed, it is fully deterministic: run it twice, get identical numbers. And as a built-in sanity check, re-running regenerated the majority, luminance, and PERCLOS rows <em>exactly</em> as Assignment 6 reported them — proof that nothing in the shared pipeline drifted, and that any change we see in the leaderboard is really the new model, not a moving floor.</p>
+
+  <p>To run it is a single command, and the new contender appears alongside the old floors:</p>
+
+  <pre><span class="s">uv run train_alertness</span>
+<span class="c"># Runs: majority, perclos, luminance, logistic_full</span>
+<span class="c"># Writes metrics, confusion matrices, and diagnostics into outputs/</span></pre>
+
+  <p>So the entire "experiment," in terms of code, is a handful of lines plus a carefully chosen exclusion set. That is exactly as it should be. The intellectual work went into the <em>question</em> — capacity versus representation — and the pipeline was built so that asking a sharp question doesn't require a sprawling change. Now: what happened when it ran?</p>
+
+  <div class="quizblock">
+    <h4>Check your understanding — Section 4</h4>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q1.</span>What is the core hypothesis behind trying a plain logistic regression after the MLP lost?</div>
+      <button class="opt" data-correct="false" data-fb="The move is toward LESS capacity, not more. Reaching for a bigger model is exactly the reflex Assignment 6 refuses.">That a bigger, higher-capacity model is needed to win.</button>
+      <button class="opt" data-correct="true" data-fb="Correct. With only 60 subjects, a flexible MLP can overfit. A low-capacity linear model on the same features tests whether the issue was model type, not model size.">That the MLP may have had too much capacity for thin data — a low-capacity linear model might use the same features better.</button>
+      <button class="opt" data-correct="false" data-fb="The feature set is held the same on purpose. The variable being tested is the model, not the features.">That the features themselves need to be replaced.</button>
+      <button class="opt" data-correct="false" data-fb="The folds are deliberately kept identical so the comparison stays fair. Changing them would break comparability.">That a different set of LOSO folds will change the outcome.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q2.</span>Why does adding a whole new model require so little code?</div>
+      <button class="opt" data-correct="true" data-fb="Right. The pipeline treats every model as 'produce per-window probabilities'; aggregation, scoring, and saving are shared. A baseline is just a name plus a feature list.">The pipeline shares everything downstream of per-window probabilities, so a baseline is just a name plus a feature list.</button>
+      <button class="opt" data-correct="false" data-fb="No auto-generation is involved — the addition is a deliberate, explicit spec. The economy comes from shared downstream code.">Because the code auto-generates models from the data.</button>
+      <button class="opt" data-correct="false" data-fb="scikit-learn provides the estimator, but the small footprint is due to the pipeline design, not the library alone.">Because scikit-learn writes the training loop for you.</button>
+      <button class="opt" data-correct="false" data-fb="The MLP wasn't deleted; it's still part of the project (with a noted caveat). The new model was added, not swapped in.">Because the old MLP was deleted to make room.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q3.</span>What does <code class="inl">NON_MODEL_INPUT_COLUMNS</code> accomplish?</div>
+      <button class="opt" data-correct="false" data-fb="It doesn't drop rows — it names which columns the model may not use as inputs.">It removes low-quality windows from the dataset.</button>
+      <button class="opt" data-correct="true" data-fb="Yes. It encodes the charter rule in code: exclude IDs, the label, the quality flag, and the reserved luminance columns — so logistic_full gets the 18 legitimate features and can't cheat on brightness.">It encodes the charter rule of which columns to exclude, keeping the luminance trap columns out of the real model.</button>
+      <button class="opt" data-correct="false" data-fb="It doesn't touch the scaler; standardization is handled separately in the pipeline.">It standardizes the feature values.</button>
+      <button class="opt" data-correct="false" data-fb="It defines inputs, not outputs. The three class probabilities are produced by the model regardless.">It chooses how many output classes there are.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q4.</span>The majority, luminance, and PERCLOS rows reproduced Assignment 6 <em>exactly</em>. Why does that matter?</div>
+      <button class="opt" data-correct="true" data-fb="Correct. Identical baseline rows prove the shared pipeline and folds didn't drift, so any leaderboard change is genuinely the new model — not a moving reference point.">It proves the shared pipeline and folds didn't drift, so any change is really the new model.</button>
+      <button class="opt" data-correct="false" data-fb="It doesn't say the new model is best — it only confirms the baselines are stable. The new model's merit is judged separately.">It proves logistic_full is the best possible model.</button>
+      <button class="opt" data-correct="false" data-fb="Reproducibility of baselines isn't about needing more data; it's a consistency check on the pipeline.">It shows the dataset needs to be re-downloaded.</button>
+      <button class="opt" data-correct="false" data-fb="QWK remains the headline metric; nothing here changes the metric choice.">It means QWK can now be dropped as a metric.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q5.</span>The write-up flags that the A6 MLP silently trained on the luminance columns. How is that best characterized?</div>
+      <button class="opt" data-correct="false" data-fb="Given luminance-only scores near chance, calling it definitive leakage overstates it. The honest framing is 'likely harmless, but caveated.'">As proof the MLP's results were entirely due to leakage.</button>
+      <button class="opt" data-correct="true" data-fb="Right. Because luminance alone is near chance, the extra columns likely just added noise; the responsible move is to caveat the A6 comparison and fix it before any future neural run.">As a likely-harmless caveat worth disclosing and fixing before the next neural run.</button>
+      <button class="opt" data-correct="false" data-fb="Hiding it would defeat the purpose — Part A explicitly asks you to name a modeling blocker or uncertainty.">As something to hide so the results look cleaner.</button>
+      <button class="opt" data-correct="false" data-fb="It's a real finding worth a fix, not a reason to throw away the project. The honest disclosure is itself a deliverable.">As a fatal flaw that invalidates the whole project.</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ SECTION 5 ============================ -->
+<section id="s5">
+  <h2><span class="num">Section 5</span>The results: did it beat PERCLOS?</h2>
+
+  <p>Yes — and cleanly enough to be worth stating plainly, cautiously enough to be worth qualifying honestly. On every headline metric, the full-feature logistic regression edged out the PERCLOS-only baseline that had led since Assignment 6, and it did so with a fold band no wider than PERCLOS's. Here is the whole leaderboard, this week's entry in green:</p>
+
+  <table class="data">
+    <thead><tr><th>Model</th><th>QWK ↑</th><th>rank-MAE ↓</th><th>Accuracy ↑</th><th>macro-F1 ↑</th></tr></thead>
+    <tbody>
+      <tr><td class="name">Majority (floor)</td><td>0.000</td><td>0.944</td><td>0.333</td><td>0.167</td></tr>
+      <tr><td class="name">Luminance-only</td><td>0.048</td><td>0.844</td><td>0.361</td><td>0.258</td></tr>
+      <tr><td class="name">MLP regularized (A6)</td><td>0.363</td><td>0.650</td><td>0.483</td><td>0.370</td></tr>
+      <tr><td class="name">PERCLOS-only (A6)</td><td>0.410</td><td>0.617</td><td>0.517</td><td>0.405</td></tr>
+      <tr class="hi"><td class="name">logistic_full (A7)</td><td class="win">0.481</td><td class="win">0.567</td><td class="win">0.528</td><td class="win">0.414</td></tr>
+    </tbody>
+  </table>
+
+  <p>The QWK gain is <code class="inl">+0.071</code> (0.481 versus 0.410), with a band of <code class="inl">± 0.378</code> that is actually a touch <em>narrower</em> than PERCLOS's <code class="inl">± 0.414</code>. Rank-MAE dropped from 0.617 to 0.567 — predictions land, on average, half a step closer to the truth. And it clears the A6 MLP on all four numbers while being far simpler, which is the real vindication of Assignment 6's hunch: the seventeen features <em>do</em> carry signal beyond PERCLOS; the MLP just wasn't the right instrument to draw it out.</p>
+
+  <div class="callout key">
+    <span class="lab">Key concept · The honest caveat that comes with the win</span>
+    A higher mean is not automatically a real improvement when fold bands are this wide. So rather than lean on the average alone, look at the models <em>fold by fold</em>: across the 60 held-out subjects, <code class="inl">logistic_full</code> beat PERCLOS in <strong>18</strong>, tied in <strong>31</strong>, and lost in <strong>11</strong>. More wins than losses, but a great many ties — the improvement is real and consistent in direction, not a landslide. That is the correct way to describe it.
+  </div>
+
+  <h3>Where the improvement actually lives</h3>
+
+  <p>Averages hide anatomy. To see <em>what</em> got better, pool all 180 video predictions into a confusion matrix — true state down the side, predicted state across the top. The green diagonal is correct calls; the red corners are the dangerous alert↔drowsy confusions QWK punishes most.</p>
+
+  <figure>
+    <div class="diagram">
+      <div class="cmwrap">
+        <div class="cm">
+          <h5>PERCLOS-only (A6)</h5>
+          <table>
+            <tr><th></th><th>→A</th><th>→L</th><th>→D</th></tr>
+            <tr><th>A</th><td class="diag">48</td><td>7</td><td class="corner">5</td></tr>
+            <tr><th>L</th><td>32</td><td class="diag">14</td><td>14</td></tr>
+            <tr><th>D</th><td class="corner">19</td><td>10</td><td class="diag">31</td></tr>
+          </table>
+        </div>
+        <div class="cm">
+          <h5>logistic_full (A7)</h5>
+          <table>
+            <tr><th></th><th>→A</th><th>→L</th><th>→D</th></tr>
+            <tr><th>A</th><td class="diag">46</td><td>10</td><td class="corner">4</td></tr>
+            <tr><th>L</th><td>29</td><td class="diag">14</td><td>17</td></tr>
+            <tr><th>D</th><td class="corner">13</td><td>12</td><td class="diag">35</td></tr>
+          </table>
+        </div>
+      </div>
+      <div style="text-align:center; font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; color:var(--muted); margin-top:10px">rows = true state · columns = predicted · A=alert, L=low-vigilant, D=drowsy · green=correct, red=two-step error</div>
+    </div>
+    <figcaption>The win is concentrated in the bottom-left red corner: true-drowsy videos wrongly called alert fell from 19 to 13.</figcaption>
+  </figure>
+
+  <p>Three things jump out. Drowsy recall <em>rose</em> (31→35 of 60 correct): the model catches more genuinely tired clips, which is the whole point of an early-fatigue aid. The most dangerous error — a drowsy person confidently called alert — <em>fell</em> from 19 to 13. Summed across both corners, two-step errors dropped from <strong>24 to 17 out of 180</strong>, a 29% reduction in exactly the mistakes that matter most. The small price is two alert videos that slipped to a neighboring class (48→46), a one-step error QWK barely penalizes.</p>
+
+  <div class="callout edge">
+    <span class="lab">Edge case · The class that refuses to budge</span>
+    Look at the middle row. Low-vigilant recall is stuck at <strong>14 of 60</strong> — exactly where PERCLOS was, barely above chance. Every model tried so far fails on the ordinal midpoint. This is not a rounding artifact; it is the project's most stubborn failure mode, and Section 6 will argue it hints at what representation the data is really missing.
+  </div>
+
+  <p>So the verdict Part A reports is disciplined: by the charter's own rule — the full feature set must beat PERCLOS on QWK <em>or</em> on the dangerous corner errors to earn its complexity — <code class="inl">logistic_full</code> qualifies, improving both, and becomes the new leading candidate. Stated modestly, because the bands overlap and half the folds tie. That combination of a real result and an honest hedge is precisely the "makes a defensible model choice" the assignment grades. But a good scientist doesn't stop at "it won" — they ask <em>why</em> it won. That question is the whole of the next section.</p>
+
+  <div class="quizblock">
+    <h4>Check your understanding — Section 5</h4>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q1.</span>What's the most accurate one-sentence summary of the result?</div>
+      <button class="opt" data-correct="false" data-fb="'Dramatically' overstates it. The bands overlap and 31 of 60 folds tie — the honest word is 'modestly but consistently.'">logistic_full dramatically and decisively crushed every other model.</button>
+      <button class="opt" data-correct="true" data-fb="Right. It improved all four headline metrics with a comparable-or-narrower band and cut the dangerous corner errors — a real but modest, hedged win.">logistic_full improved every headline metric and cut the dangerous corner errors, but with overlapping bands and many ties.</button>
+      <button class="opt" data-correct="false" data-fb="It didn't lose — it beat PERCLOS on all four metrics. This flips the result.">logistic_full lost to PERCLOS, confirming simpler is always better.</button>
+      <button class="opt" data-correct="false" data-fb="The models were clearly separable in direction (18 wins vs 11 losses across folds). 'Indistinguishable' isn't the finding.">The two models were completely indistinguishable on every measure.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q2.</span>Why report the fold-by-fold record (18 win / 31 tie / 11 loss) instead of just the mean gain?</div>
+      <button class="opt" data-correct="true" data-fb="Correct. With wide, overlapping bands, the paired per-fold view shows the improvement is consistent in direction rather than driven by a few lucky folds — a more honest read than the mean alone.">Because with wide overlapping bands, the paired view shows whether the gain is consistent rather than luck.</button>
+      <button class="opt" data-correct="false" data-fb="The mean is still reported and useful — the paired record supplements it, it doesn't replace it because means are forbidden.">Because means are not allowed to be reported in the course.</button>
+      <button class="opt" data-correct="false" data-fb="It's not about counting folds to inflate the result; ties are counted honestly and there are many of them.">Because counting wins makes the result look bigger than it is.</button>
+      <button class="opt" data-correct="false" data-fb="The number of folds is fixed at 60 by LOSO; this record describes outcomes, not fold count.">Because it changes how many folds there are.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q3.</span>In the confusion matrices, where did the biggest improvement happen?</div>
+      <button class="opt" data-correct="false" data-fb="Alert recall actually dipped slightly (48→46). The gain was elsewhere.">Alert videos correctly called alert rose sharply.</button>
+      <button class="opt" data-correct="true" data-fb="Yes. True-drowsy-called-alert (the bottom-left corner) fell 19→13, and drowsy recall rose 31→35 — the dangerous two-step errors shrank.">Drowsy videos wrongly called alert dropped (19→13), and drowsy recall rose (31→35).</button>
+      <button class="opt" data-correct="false" data-fb="The low-vigilant middle class did NOT improve — it stayed at 14/60. That's the stubborn failure mode.">The low-vigilant class was finally solved.</button>
+      <button class="opt" data-correct="false" data-fb="One-step errors weren't the story; the notable change was the reduction in two-step corner errors.">Every off-by-one error was eliminated.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q4.</span>Why does cutting alert↔drowsy errors matter more than the two alert videos lost to a neighbor?</div>
+      <button class="opt" data-correct="true" data-fb="Correct. Alert↔drowsy is a two-step error QWK penalizes ~4× as much as a one-step slip, and it's the most consequential mistake for a fatigue aid.">Because a two-step error is far more costly (and QWK-penalized) than a one-step slip.</button>
+      <button class="opt" data-correct="false" data-fb="Drowsy videos aren't more numerous — each class has exactly 60 videos. The reason is error severity, not frequency.">Because there are many more drowsy videos than alert ones.</button>
+      <button class="opt" data-correct="false" data-fb="Accuracy treats both errors equally; it's QWK (and real-world stakes) that make the two-step error worse.">Because accuracy counts two-step errors as worse automatically.</button>
+      <button class="opt" data-correct="false" data-fb="Alert videos aren't ignored — losing two is a real if minor cost. The point is it's a cheap one-step error.">Because alert videos don't count toward the score.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q5.</span>What is the persistent failure mode the results expose?</div>
+      <button class="opt" data-correct="false" data-fb="Alert recall is the strongest class (46/60). It's not the weak point.">The model can't recognize alert videos at all.</button>
+      <button class="opt" data-correct="true" data-fb="Right. Low-vigilant recall is stuck at 14/60 — barely above chance — for every model tried. The ordinal midpoint is the unsolved problem.">The low-vigilant middle class stays near chance (14/60) for every model.</button>
+      <button class="opt" data-correct="false" data-fb="Two-step errors went down, not up. That was the improvement, not a failure.">Two-step alert↔drowsy errors increased sharply.</button>
+      <button class="opt" data-correct="false" data-fb="The luminance baseline stayed near chance (0.048) — it did not suddenly become competitive.">The luminance baseline suddenly became the best model.</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ SECTION 6 ============================ -->
+<section id="s6">
+  <h2><span class="num">Section 6</span>Opening the box: what the model actually leans on</h2>
+
+  <p>A linear model has a rare virtue: you can ask it, directly, what it pays attention to. Each feature carries a weight for each class, and because every feature was standardized to the same scale before training, the <em>size</em> of a weight is a fair measure of how much that feature moves the decision. Big weight, big influence. This is the payoff for choosing an interpretable model over a neural net — and it turns "it won" into "it won <em>because</em>."</p>
+
+  <p>To read the weights honestly, a small companion script (<code class="inl">scripts/inspect_logistic_full.py</code>) refits the exact same pipeline on each of the 60 LOSO training folds and averages the absolute weights across them. Averaging over folds matters: a feature that looks important in one fold but flips sign in another is not a stable signal. Here is what carries the decision, largest first:</p>
+
+  <figure>
+    <div class="diagram">
+      <div class="bars">
+        <div class="bar-row"><span class="lab">perclos</span><span class="bar-track"><span class="bar-fill" style="width:100%"></span></span><span class="val">0.80</span></div>
+        <div class="bar-row"><span class="lab">blink_dur_max</span><span class="bar-track"><span class="bar-fill" style="width:46%"></span></span><span class="val">0.37</span></div>
+        <div class="bar-row"><span class="lab">eye_blink_mean</span><span class="bar-track"><span class="bar-fill" style="width:46%"></span></span><span class="val">0.36</span></div>
+        <div class="bar-row"><span class="lab">blink_rate</span><span class="bar-track"><span class="bar-fill" style="width:41%"></span></span><span class="val">0.33</span></div>
+        <div class="bar-row"><span class="lab">blink_dur_mean</span><span class="bar-track"><span class="bar-fill" style="width:41%"></span></span><span class="val">0.33</span></div>
+        <div class="bar-row"><span class="lab">ear_std</span><span class="bar-track"><span class="bar-fill" style="width:30%"></span></span><span class="val">0.24</span></div>
+        <div class="bar-row"><span class="lab">yawn_count</span><span class="bar-track"><span class="bar-fill dim" style="width:17%"></span></span><span class="val">0.13</span></div>
+        <div class="bar-row"><span class="lab">frac_head_down</span><span class="bar-track"><span class="bar-fill dim" style="width:16%"></span></span><span class="val">0.13</span></div>
+        <div class="bar-row"><span class="lab">pitch / jaw / roll…</span><span class="bar-track"><span class="bar-fill dim" style="width:7%"></span></span><span class="val">≤0.10</span></div>
+      </div>
+    </div>
+    <figcaption>Mean absolute standardized weight per feature, averaged over 60 folds. Green = the eyelid/blink cluster that drives the decision; grey = the yawn and head-pose features that barely register.</figcaption>
+  </figure>
+
+  <p>This picture is the intellectual heart of the whole week, so it's worth reading slowly. PERCLOS is still the single loudest voice — no surprise; it was a strong model by itself. But it is <em>not</em> a solo. Beneath it sits a tight cluster of blink-dynamics features — how long the longest blink lasted, how heavy the average blink is, how frequently blinks come, how much the eye-opening wobbles. Together they carry real, stable weight. Meanwhile the yawn, jaw, and head-pose features barely move the needle.</p>
+
+  <div class="callout key">
+    <span class="lab">Key concept · Why logistic_full beats PERCLOS</span>
+    The extra win over PERCLOS-only does <em>not</em> come from the whole feature set pulling together, and it does not come from yawning or head-nodding. It comes almost entirely from <strong>eyelid temporal dynamics</strong> — the fine-grained texture of blinking that a single PERCLOS number can't capture. The full-feature model is essentially "PERCLOS, plus a richer description of how the eyes are behaving."
+  </div>
+
+  <p>Now connect this to the failure mode from Section 5. The low-vigilant middle class stays stuck at chance for every model. And here we can see a plausible reason. All of the signal lives in eyelid behavior <em>summarized within a window</em> — averages and counts. But low vigilance may not be a matter of <em>how much</em> the eyes close on average; it may be a matter of <em>how that behavior drifts over time</em> — the slow slide from crisp blinks to heavy ones. Per-window averages, by construction, throw that drift away. This is exactly the cost Section 2 warned about, now with evidence pointing at it.</p>
+
+  <div class="callout def">
+    <span class="lab">Definition · The temporal hypothesis</span>
+    The remaining bottleneck may be <em>representational, not architectural</em>: the tabularization preserved within-window eyelid statistics but discarded how they evolve <em>across</em> windows. Notably, the dataset's own published baseline (Ghoddoosian et al., 2019) found its signal precisely in <em>sequential</em> blink features fed to a recurrent network — independent support for the same idea.
+  </div>
+
+  <p>One more diagnostic closes the loop, and it tempers the celebration. How <em>confident</em> is the model when it's right versus wrong? A useful warning system should be surer when correct. logistic_full averages 0.489 confidence on correct calls and 0.446 on incorrect ones — a gap, and slightly wider than PERCLOS's, but far too narrow to hang a "take a break now" alarm on. Calibration remains unsolved, and the memo says so.</p>
+
+  <p>So interpretation gives us something more valuable than a trophy: a direction. The gain is real and it is made of eyelid dynamics; the wall is the middle class; and the most promising next move is to stop averaging time away. That directly shapes the forward-looking half of the assignment — which is where Part B picks up.</p>
+
+  <div class="quizblock">
+    <h4>Check your understanding — Section 6</h4>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q1.</span>Why can the standardized coefficients be compared by size to gauge feature importance?</div>
+      <button class="opt" data-correct="true" data-fb="Correct. Standardizing puts every feature on the same scale before training, so a larger weight genuinely means more influence — not just a feature measured in bigger units.">Because standardizing puts all features on the same scale, so weight magnitude reflects real influence.</button>
+      <button class="opt" data-correct="false" data-fb="Raw-unit weights would NOT be comparable — a feature in large units could get a small weight and vice versa. Standardization is what makes them comparable.">Because raw feature units are already directly comparable.</button>
+      <button class="opt" data-correct="false" data-fb="It's not about being the newest feature; importance is about weight magnitude on a common scale.">Because the largest weight always belongs to the newest feature.</button>
+      <button class="opt" data-correct="false" data-fb="A neural net's weights are much harder to read this way — this transparency is exactly why a linear model was chosen.">Because neural networks make weights easier to interpret than linear models.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q2.</span>Where does logistic_full's advantage over PERCLOS-only actually come from?</div>
+      <button class="opt" data-correct="false" data-fb="Yawn and head-pose features barely registered (≤0.13). They're not the source of the gain.">From yawn and head-pose features doing the heavy lifting.</button>
+      <button class="opt" data-correct="true" data-fb="Right. Beneath PERCLOS sits a stable cluster of blink-dynamics features — duration, frequency, EAR wobble — that add a richer description of eye behavior.">From a cluster of blink-dynamics features that enrich the basic eye-closure signal.</button>
+      <button class="opt" data-correct="false" data-fb="The brightness columns are excluded from this model entirely — they can't contribute.">From the brightness/luminance columns.</button>
+      <button class="opt" data-correct="false" data-fb="All 18 features don't contribute equally; most head-pose and jaw features are near zero. The gain is concentrated in eyelid dynamics.">From all 18 features contributing roughly equally.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q3.</span>Why does the script average coefficients across all 60 folds rather than reading one fold?</div>
+      <button class="opt" data-correct="true" data-fb="Correct. A feature that looks important in one fold but flips sign in another isn't a stable signal. Averaging across folds reveals what's consistently relied upon.">To find features that are consistently influential, not important in just one fold by chance.</button>
+      <button class="opt" data-correct="false" data-fb="Averaging weights doesn't speed anything up meaningfully; it's about stability of the interpretation.">Because averaging makes the training run faster.</button>
+      <button class="opt" data-correct="false" data-fb="It doesn't change the leaderboard metrics — it's a post-hoc diagnostic that never touches test scoring.">Because it improves the model's QWK score.</button>
+      <button class="opt" data-correct="false" data-fb="The folds are already fixed and disjoint; the averaging is about reading weights, not re-splitting data.">To create new folds for a fresh experiment.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q4.</span>How does the coefficient evidence explain the stuck low-vigilant class?</div>
+      <button class="opt" data-correct="false" data-fb="The problem isn't too many features — it's that the informative features are summarized within windows, discarding temporal drift.">The model has too many features, confusing the middle class.</button>
+      <button class="opt" data-correct="true" data-fb="Right. The signal lives in eyelid behavior summarized within a window; low vigilance may show up as drift over time, which per-window averaging discards.">Low vigilance may be a temporal drift that per-window averages throw away.</button>
+      <button class="opt" data-correct="false" data-fb="Low-vigilant videos aren't underrepresented — each class has 60 videos. Balance isn't the issue.">There simply aren't enough low-vigilant videos in the data.</button>
+      <button class="opt" data-correct="false" data-fb="Brightness is excluded from this model; it can't be responsible for the middle-class failure.">The brightness confound is corrupting the middle class.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q5.</span>What does the "temporal hypothesis" claim the real bottleneck is?</div>
+      <button class="opt" data-correct="true" data-fb="Correct. It's representational: the tabularization kept within-window statistics but discarded cross-window evolution — echoed by the dataset's own sequential-model baseline.">Representational — the features discard how eye behavior evolves across windows, not a lack of model capacity.</button>
+      <button class="opt" data-correct="false" data-fb="More capacity was exactly what the MLP had, and it lost. The hypothesis points at representation, not architecture size.">Architectural — the model simply needs more layers and parameters.</button>
+      <button class="opt" data-correct="false" data-fb="The evaluation is deliberately fixed and fair; the hypothesis is about the input representation, not the metric.">Evaluative — QWK is measuring the wrong thing.</button>
+      <button class="opt" data-correct="false" data-fb="Label quality isn't the claim here; the claim is that temporal structure was averaged away in feature extraction.">Labeling — the drowsiness labels are wrong.</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ SECTION 7 ============================ -->
+<section id="s7">
+  <h2><span class="num">Section 7</span>Part B: is transfer learning even relevant here?</h2>
+
+  <p>Week 7 taught convolutional networks, pretrained vision models, and transfer learning — taking a network trained on millions of generic images and repurposing it for your task. Part B asks the disciplined question: does any of that belong in <em>this</em> project? The tempting answer, and the wrong one, is "yes, let's bolt a CNN on." The assignment is practically engineered to reward resisting that temptation with a reasoned decision.</p>
+
+  <p>The verdict here is a careful middle: <strong>indirectly relevant</strong>. Not "yes, adopt it," and not a flat "no, irrelevant." To see why, recall the single most important sentence from Section 2.</p>
+
+  <div class="callout key">
+    <span class="lab">Key concept · The project already does transfer learning</span>
+    MediaPipe's face landmarker <em>is</em> a pretrained, CNN-based vision model. The project already runs it and consumes its outputs — it just uses <em>geometric</em> features (eyelid position, jaw openness) instead of generic embeddings. So the Week 7 idea of "use a frozen pretrained vision model as a feature extractor" isn't hypothetical here; it is the foundation the whole pipeline already stands on.
+  </div>
+
+  <p>That reframing is what makes "indirectly relevant" the precise answer. The core concept from lecture is present and load-bearing. What is <em>not</em> warranted is going further — swapping the geometric features for raw-pixel CNNs or fine-tuning an image model end-to-end. And the reasons are exactly the evidence gathered in Parts A and earlier weeks:</p>
+
+  <ul>
+    <li><strong>The charter scopes out raw-pixel modeling</strong>, and that scope hasn't become infeasible — the geometric approach is working and improving.</li>
+    <li><strong>Sixty subjects is far too few to fine-tune a large image model</strong> without it memorizing faces — the very subject-leakage risk Section 3 built the whole evaluation to prevent.</li>
+    <li><strong>Capacity is not the bottleneck.</strong> Section 6 showed a low-capacity linear model beating a neural net; dropping in high-dimensional generic embeddings would worsen the capacity-to-data mismatch, not fix it.</li>
+    <li><strong>Pixels would reopen the confound the geometry closes.</strong> The luminance baseline near chance is <em>evidence</em> the current design isn't a brightness detector; raw-pixel models would let lighting, background, and appearance leak back in.</li>
+  </ul>
+
+  <p>The honest scientist also names what would change the decision, and here the assignment's forward-looking purpose kicks in — Part B is setting up Assignment 8. There are two candidate tests, and a real-world constraint decides their priority:</p>
+
+  <figure>
+    <div class="diagram">
+      <div style="display:flex; gap:16px; flex-wrap:wrap">
+        <div style="flex:1; min-width:250px; border:1.5px solid #cfe3d7; border-radius:10px; padding:14px 16px; background:var(--accent-soft)">
+          <div style="font-family:ui-sans-serif,system-ui,sans-serif; font-weight:800; color:var(--accent); font-size:12px; letter-spacing:.05em; text-transform:uppercase">Test 1 · Higher priority</div>
+          <div style="font-family:ui-sans-serif,system-ui,sans-serif; font-weight:700; margin:5px 0">Temporal model over existing windows</div>
+          <div style="font-family:ui-sans-serif,system-ui,sans-serif; font-size:13.5px; color:var(--muted)">Tests the temporal hypothesis from §6. <strong>No new data needed</strong> — the window features already exist. Cheap, and the evidence points right at it.</div>
+        </div>
+        <div style="flex:1; min-width:250px; border:1.5px solid #f0e0bf; border-radius:10px; padding:14px 16px; background:var(--warn-soft)">
+          <div style="font-family:ui-sans-serif,system-ui,sans-serif; font-weight:800; color:var(--warn); font-size:12px; letter-spacing:.05em; text-transform:uppercase">Test 2 · Cost-gated</div>
+          <div style="font-family:ui-sans-serif,system-ui,sans-serif; font-weight:700; margin:5px 0">Frozen generic image embeddings</div>
+          <div style="font-family:ui-sans-serif,system-ui,sans-serif; font-size:13.5px; color:var(--muted)">The textbook transfer-learning test. But needs the <strong>~111 GB of video re-downloaded</strong> and reprocessed — many hours, possibly won't fit on disk at once.</div>
+        </div>
+      </div>
+    </div>
+    <figcaption>The two ways to finalize the modality decision — and why the cheaper, better-motivated one goes first.</figcaption>
+  </figure>
+
+  <div class="callout edge">
+    <span class="lab">Edge case · Feasibility is part of the argument</span>
+    The purest transfer-learning test — frozen embeddings versus geometric features — would settle the question definitively. But the raw videos were deliberately discarded after extraction (that was the whole point of going tabular; keeping 111&nbsp;GB was never the plan). Re-acquiring them costs many hours and may not fit on disk. A good engineering decision weighs a test's <em>expected value against its cost</em> — and Section 6's evidence suggests the bottleneck is temporal, not appearance-based, which lowers the expected payoff of the expensive test. So it stays on the list, but second.
+  </div>
+
+  <p>Finally, Part B updates the project's risk ledger. Depending on a pretrained model isn't free even when you only use its geometry: MediaPipe's own training data is undocumented, so its per-subgroup reliability (glasses, facial hair, skin tone) is an unquantified failure mode that compounds the dataset's known demographic skew (51 men, 9 women). Naming that honestly — rather than pretending the pretrained dependency is risk-free — is the kind of responsible-AI accounting the assignment's Part B explicitly asks for.</p>
+
+  <div class="quizblock">
+    <h4>Check your understanding — Section 7</h4>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q1.</span>Why is transfer learning judged "indirectly relevant" rather than "not relevant"?</div>
+      <button class="opt" data-correct="true" data-fb="Correct. MediaPipe is a pretrained CNN-based vision model already used as a frozen feature extractor — the Week 7 concept is embodied in the pipeline, just via geometry rather than embeddings.">Because the pipeline already uses a pretrained vision model (MediaPipe) as a frozen feature extractor.</button>
+      <button class="opt" data-correct="false" data-fb="The plan is NOT to fine-tune a CNN — that's explicitly argued against. 'Indirectly relevant' is about MediaPipe already being pretrained.">Because the project plans to fine-tune a large CNN next week.</button>
+      <button class="opt" data-correct="false" data-fb="Transfer learning wasn't irrelevant to the lecture — the point is it's already present in the project in an indirect form.">Because transfer learning has nothing to do with the project at all.</button>
+      <button class="opt" data-correct="false" data-fb="Raw-pixel CNNs are argued against, not required. The 'indirect' relevance is about the existing pretrained dependency.">Because raw-pixel CNNs are required by the charter.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q2.</span>Which is <em>not</em> a good reason given against adopting raw-pixel / fine-tuned CNNs here?</div>
+      <button class="opt" data-correct="false" data-fb="This IS a stated reason — 60 subjects is far too few to fine-tune without memorizing faces.">60 subjects is too few to fine-tune without memorizing faces.</button>
+      <button class="opt" data-correct="false" data-fb="This IS a stated reason — a linear model beat a neural net, so more capacity is the wrong direction.">Capacity isn't the bottleneck, so bigger models would worsen the mismatch.</button>
+      <button class="opt" data-correct="true" data-fb="Right — this is the false statement. CNNs are perfectly capable of learning fatigue cues; the objection is about data size, leakage, and confounds, not raw capability.">CNNs are fundamentally incapable of detecting drowsiness.</button>
+      <button class="opt" data-correct="false" data-fb="This IS a stated reason — pixels would reopen the lighting/appearance confound the geometry closes.">Pixel models would reopen the lighting/appearance confound.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q3.</span>Why is the temporal-model test prioritized over the frozen-embeddings test for Assignment 8?</div>
+      <button class="opt" data-correct="true" data-fb="Correct. It needs no new data (windows already exist), it's cheap, and §6's evidence points at a temporal bottleneck — higher expected value at lower cost.">It needs no new data, is cheap, and the evidence points at a temporal bottleneck.</button>
+      <button class="opt" data-correct="false" data-fb="It's not that embeddings are impossible — they're just expensive (111 GB re-download). The temporal test simply has a better cost/value ratio.">Because frozen embeddings are impossible to compute.</button>
+      <button class="opt" data-correct="false" data-fb="The professor didn't mandate a specific test; the priority comes from cost and evidence.">Because the assignment requires a recurrent network specifically.</button>
+      <button class="opt" data-correct="false" data-fb="A temporal model is more complex than logistic regression, not simpler. Its priority is about evidence and cost, not simplicity.">Because it's the simplest possible model to build.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q4.</span>Why does feasibility (the 111 GB re-download) legitimately factor into the decision?</div>
+      <button class="opt" data-correct="false" data-fb="Avoiding it isn't laziness — it's weighing a test's cost against its expected value, especially when evidence suggests a cheaper test is more promising.">Because doing hard experiments is always unnecessary.</button>
+      <button class="opt" data-correct="true" data-fb="Right. Good engineering weighs a test's expected value against its cost; here the expensive test's payoff looks lower given the temporal evidence, so it's deferred, not dropped.">Because a good decision weighs a test's expected value against its cost, not just its ideal purity.</button>
+      <button class="opt" data-correct="false" data-fb="The videos were discarded on purpose (going tabular was the plan), not lost by accident.">Because the videos were accidentally deleted and can't be recovered.</button>
+      <button class="opt" data-correct="false" data-fb="The embedding test isn't abandoned — it stays on the list, just second in priority.">Because the embedding test has been permanently ruled out.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q5.</span>What new risk does relying on MediaPipe introduce, even using only its geometry?</div>
+      <button class="opt" data-correct="true" data-fb="Correct. Its training data is undocumented, so its reliability across subgroups (glasses, facial hair, skin tone) is unquantified and compounds the dataset's demographic skew.">Its undocumented training data means unquantified per-subgroup reliability, compounding cohort skew.</button>
+      <button class="opt" data-correct="false" data-fb="MediaPipe's license is permissive (Apache-2.0); licensing isn't the main concern flagged here.">A restrictive license that forbids any use of the model.</button>
+      <button class="opt" data-correct="false" data-fb="Using geometry doesn't reintroduce the brightness confound — that's precisely what the geometric design avoids.">That it forces the brightness confound back into the features.</button>
+      <button class="opt" data-correct="false" data-fb="It runs on-device cheaply; compute cost of the extractor isn't the risk being raised.">That it requires a supercomputer to run at inference time.</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ SECTION 8 ============================ -->
+<section id="s8">
+  <h2><span class="num">Section 8</span>What you're turning in</h2>
+
+  <p>Everything we've walked through funnels into one zip file with two kinds of contents: the <em>writeup</em> that makes the argument, and the <em>artifacts</em> that back every claim in it with runnable evidence. Here is the whole package, grouped by role, so you can see at a glance how each piece earns its place.</p>
+
+  <h3>The argument</h3>
+  <ul class="filelist">
+    <li>
+      <span class="fn">docs/Assignment 7 Notes.md</span> <span class="pill doc">the memo</span>
+      <div class="fd">The graded deliverable. Part A tells the modeling story (problem, experiment, results table, confusion matrices, the blocker, the next experiment); Part B makes the transfer-learning decision. Everything in this walkthrough is the plain-English version of what that memo argues.</div>
+    </li>
+  </ul>
+
+  <h3>The code change</h3>
+  <ul class="filelist">
+    <li>
+      <span class="fn">src/training/baselines.py</span> <span class="pill edit">edited</span>
+      <div class="fd">Adds the <code class="inl">logistic_full</code> run spec and the <code class="inl">NON_MODEL_INPUT_COLUMNS</code> exclusion set that keeps the luminance columns out. This is the whole experiment, in a handful of lines (Section 4).</div>
+    </li>
+    <li>
+      <span class="fn">scripts/inspect_logistic_full.py</span> <span class="pill new">new</span>
+      <div class="fd">The interpretability diagnostic: refits per fold, averages the standardized weights, and writes the ranking that revealed the eyelid-dynamics story (Section 6).</div>
+    </li>
+    <li>
+      <span class="fn">tests/test_baselines.py · tests/test_train.py</span> <span class="pill edit">edited</span>
+      <div class="fd">Updated so the test suite expects the new run and asserts the luminance/quality columns stay excluded. All 44 tests pass — evidence the change didn't break the pipeline.</div>
+    </li>
+  </ul>
+
+  <h3>The evidence it produced</h3>
+  <ul class="filelist">
+    <li>
+      <span class="fn">outputs/metric_summary.csv · fold_metrics.csv · video_predictions.csv</span> <span class="pill new">regenerated</span>
+      <div class="fd">The leaderboard, the per-fold record (that 18/31/11 win-tie-loss count), and every video-level prediction behind the confusion matrices.</div>
+    </li>
+    <li>
+      <span class="fn">outputs/confusion_matrices.csv · diagnostics.csv · logistic_full_coefficients.csv</span> <span class="pill new">regenerated</span>
+      <div class="fd">The error anatomy, the confidence-by-correctness gaps, and the coefficient ranking — the "evidence beyond a single score" Part A requires.</div>
+    </li>
+    <li>
+      <span class="fn">outputs/folds.json · manifest.json</span> <span class="pill new">regenerated</span>
+      <div class="fd">The exact LOSO fold assignments (so the run reproduces) and the provenance record (seed, library versions, timestamps).</div>
+    </li>
+    <li>
+      <span class="fn">outputs_a6_backup/</span> <span class="pill doc">preserved</span>
+      <div class="fd">Assignment 6's outputs kept untouched, so the A7-vs-A6 comparison can be checked against the original numbers.</div>
+    </li>
+  </ul>
+
+  <h3>How it maps to what the assignment asked</h3>
+  <table class="data">
+    <thead><tr><th>Assignment 7 requirement</th><th>Where it's satisfied</th></tr></thead>
+    <tbody>
+      <tr><td class="name">One focused experiment advancing the A6 plan</td><td>logistic_full — the exact experiment A6 named</td></tr>
+      <tr><td class="name">Same split &amp; metrics as before</td><td>identical LOSO folds; baselines reproduced exactly</td></tr>
+      <tr><td class="name">Compare to a prior baseline</td><td>vs PERCLOS-only and the A6 MLP</td></tr>
+      <tr><td class="name">Evidence beyond one score</td><td>confusion matrices, per-class recall, coefficients, confidence</td></tr>
+      <tr><td class="name">Name a blocker / uncertainty</td><td>stuck low-vigilant class; MLP luminance caveat</td></tr>
+      <tr><td class="name">Transfer-learning relevance decision</td><td>Part B: "indirectly relevant," with evidence and next tests</td></tr>
+    </tbody>
+  </table>
+
+  <p>That is the assignment, whole. A sharp question inherited from last week; a small, careful change to answer it; a modest but real result reported with its hedges intact; an interpretation that turns the result into a direction; and a forward-looking decision about where the project should and shouldn't go next. The model isn't finished — the middle class is still unsolved, calibration is still weak — but it is <em>better</em>, and more importantly, you can now say exactly why, and exactly what to try next. That is what the course is really teaching.</p>
+
+  <div class="quizblock">
+    <h4>Check your understanding — Section 8</h4>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q1.</span>What are the two kinds of contents in the submission?</div>
+      <button class="opt" data-correct="true" data-fb="Correct. The memo makes the argument; the code, tests, and output files are the artifacts that back every claim with runnable evidence.">The writeup (the memo) and the artifacts (code + evidence files).</button>
+      <button class="opt" data-correct="false" data-fb="The raw videos aren't submitted — they were discarded after extraction, and only aggregate features/metrics are shared.">The raw video files and a slideshow.</button>
+      <button class="opt" data-correct="false" data-fb="No trained model binary is the deliverable here; the evidence is metrics, predictions, and diagnostics, plus the code to reproduce them.">A trained model binary and nothing else.</button>
+      <button class="opt" data-correct="false" data-fb="It's not just a spreadsheet — the memo's argument is the graded core, supported by code and outputs.">Only a spreadsheet of numbers.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q2.</span>Why re-run the experiment locally before zipping, even though the numbers won't change?</div>
+      <button class="opt" data-correct="true" data-fb="Right. The results are deterministic, but the manifest records library versions/environment; re-running locally makes the provenance record match your actual machine.">So the manifest's provenance (library versions, environment) matches your real machine.</button>
+      <button class="opt" data-correct="false" data-fb="The numbers are deterministic and won't change — that's stated explicitly. The reason is provenance accuracy, not different results.">Because the numbers will come out completely different otherwise.</button>
+      <button class="opt" data-correct="false" data-fb="The folds are saved and fixed; re-running doesn't create new folds.">Because it generates a fresh, different set of folds each time.</button>
+      <button class="opt" data-correct="false" data-fb="Re-running doesn't improve the score — logistic regression is deterministic given the seed.">Because running it again improves the QWK score.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q3.</span>Why is <code class="inl">outputs_a6_backup/</code> kept in the submission?</div>
+      <button class="opt" data-correct="true" data-fb="Correct. Preserving Assignment 6's untouched outputs lets anyone verify the A7-vs-A6 comparison against the original numbers.">So the A7-vs-A6 comparison can be checked against the original, untouched numbers.</button>
+      <button class="opt" data-correct="false" data-fb="It's evidence, not clutter — it makes the comparison auditable. It's deliberately kept.">By accident; it should have been deleted.</button>
+      <button class="opt" data-correct="false" data-fb="It holds the old outputs, not the raw videos. The videos aren't in the repo at all.">Because it contains the raw video files.</button>
+      <button class="opt" data-correct="false" data-fb="The A6 MLP wasn't re-run this week; its numbers are cited from that preserved backup, not retrained.">Because the MLP was retrained this week and stored there.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q4.</span>Which requirement is satisfied by the confusion matrices and coefficient ranking?</div>
+      <button class="opt" data-correct="false" data-fb="The split was deliberately unchanged; these artifacts are about evidence depth, not the evaluation procedure.">Changing the evaluation split each week.</button>
+      <button class="opt" data-correct="true" data-fb="Right. 'Include evidence beyond a single aggregate score' — confusion matrices, per-class recall, and coefficients are exactly that.">Providing evidence beyond a single aggregate score.</button>
+      <button class="opt" data-correct="false" data-fb="Adopting a pretrained model is explicitly what the assignment warns against, not a requirement these satisfy.">Adopting a pretrained vision model.</button>
+      <button class="opt" data-correct="false" data-fb="A final model claim isn't required this week — the decision is preliminary, revisited in Assignment 8.">Making a final, locked-in model claim.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q5.</span>What's the fair overall characterization of the project's state after Assignment 7?</div>
+      <button class="opt" data-correct="false" data-fb="It's not finished — the middle class is unsolved and calibration is weak. Overclaiming completion is exactly what the assignment warns against.">Finished and ready to deploy as a reliable product.</button>
+      <button class="opt" data-correct="true" data-fb="Correct. It improved measurably, the reasons are understood, and the next steps are clear — but the middle class and calibration remain open. Real progress, honestly bounded.">Measurably better with understood reasons and clear next steps, but with real open problems.</button>
+      <button class="opt" data-correct="false" data-fb="It's better than random by a clear margin (QWK 0.48, well above the 0 floor) — 'no better than chance' understates it.">No better than random chance and not worth continuing.</button>
+      <button class="opt" data-correct="false" data-fb="The tabular approach was validated and improved this week — abandoning it isn't the conclusion the evidence supports.">Proven a failure, so the tabular approach should be scrapped.</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+</section>
+
+<p class="footnote">A study companion to Assignment 7 of the Sleepy Sentinel portfolio project. Every metric quoted here traces to a file in <code class="inl">outputs/</code>; the prose is a guide to the argument, and the memo is the deliverable. Click any answer above to check yourself — the guide keeps score for you at the top of the page.</p>
+
+</div><!-- /.wrap -->
+
+<script>
+(function(){
+  // ---- Quiz interaction ----
+  var quizzes = document.querySelectorAll('.quiz');
+  var totalQuestions = quizzes.length;
+  var answered = {};      // index -> true once answered correctly-or-not (first click counts)
+  var correctCount = 0;
+
+  quizzes.forEach(function(quiz, qi){
+    var opts = quiz.querySelectorAll('.opt');
+    var fb = quiz.querySelector('.fb');
+    opts.forEach(function(opt){
+      opt.addEventListener('click', function(){
+        var isCorrect = opt.getAttribute('data-correct') === 'true';
+        var firstTime = !answered[qi];
+
+        // clear prior marks on this question
+        opts.forEach(function(o){
+          o.classList.remove('wrong');
+          // keep the correct-answer highlight if already revealed
+        });
+
+        if(isCorrect){
+          opt.classList.add('correct');
+          if(!opt.querySelector('.mark')) opt.insertAdjacentHTML('beforeend','<span class="mark"></span>');
+          fb.className = 'fb ok show';
+          fb.innerHTML = '<b>Correct.</b> ' + (opt.getAttribute('data-fb')||'');
+          if(firstTime){ correctCount++; }
+        } else {
+          opt.classList.add('wrong');
+          if(!opt.querySelector('.mark')) opt.insertAdjacentHTML('beforeend','<span class="mark"></span>');
+          fb.className = 'fb no show';
+          fb.innerHTML = '<b>Not quite.</b> ' + (opt.getAttribute('data-fb')||'');
+          // reveal the correct option
+          opts.forEach(function(o){
+            if(o.getAttribute('data-correct') === 'true'){
+              o.classList.add('reveal-correct');
+            }
+          });
+        }
+        answered[qi] = true;
+        updateScore();
+      });
+    });
+  });
+
+  // ---- Score + progress readout in the top bar ----
+  var scoreEl = document.createElement('div');
+  scoreEl.style.cssText = 'position:fixed;top:10px;right:14px;z-index:60;font-family:ui-sans-serif,system-ui,sans-serif;font-size:12px;font-weight:700;background:#fff;border:1px solid #e4e7ec;border-radius:20px;padding:5px 12px;box-shadow:0 1px 4px rgba(0,0,0,.08);color:#2f6f4f';
+  document.body.appendChild(scoreEl);
+  function updateScore(){
+    var done = Object.keys(answered).length;
+    scoreEl.textContent = 'Score ' + correctCount + '/' + done + '  ·  ' + done + '/' + totalQuestions + ' answered';
+  }
+  updateScore();
+
+  // ---- Reading progress bar ----
+  var pbar = document.getElementById('pbar');
+  function onScroll(){
+    var h = document.documentElement;
+    var scrolled = (h.scrollTop) / (h.scrollHeight - h.clientHeight);
+    pbar.style.width = Math.max(0, Math.min(1, scrolled)) * 100 + '%';
+  }
+  window.addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+})();
+</script>
+</body>
+</html>

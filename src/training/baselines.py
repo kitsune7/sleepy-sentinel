@@ -1,9 +1,14 @@
 """Stage 0 diagnostic baselines for alertness classification.
 
-These models are intentionally small floors, not contenders:
+Most of these models are intentionally small floors, not contenders:
 - majority class checks the class-balance floor
 - PERCLOS-only checks the strongest eyelid-domain heuristic
 - luminance-only checks whether lighting can explain the signal
+
+Assignment 7 adds one serious interpretable contender:
+- logistic_full: multinomial logistic regression on the full charter
+  model-input feature set (geometric/temporal features only; the luminance
+  confound columns and `frac_face_missing` stay excluded per the charter)
 
 They emit the same window-level probability table shape as the MLP path so the
 training coordinator can reuse video aggregation and metric code unchanged.
@@ -23,6 +28,9 @@ from sklearn.preprocessing import StandardScaler
 NUM_CLASSES = 3
 LABELS = list(range(NUM_CLASSES))
 LUMINANCE_CANDIDATE_COLUMNS = ("bright_mean", "bright_std", "warmth_mean", "warmth_std", "warmth")
+NON_MODEL_INPUT_COLUMNS = frozenset(
+    {"subject_id", "video_id", "window_idx", "label", "frac_face_missing", *LUMINANCE_CANDIDATE_COLUMNS}
+)
 
 
 @dataclass(frozen=True)
@@ -43,6 +51,10 @@ def available_baselines(windows_df: pd.DataFrame) -> list[BaselineSpec]:
     luminance_columns = tuple(col for col in LUMINANCE_CANDIDATE_COLUMNS if col in windows_df.columns)
     if luminance_columns:
         baselines.append(BaselineSpec("luminance", luminance_columns))
+
+    full_feature_columns = tuple(col for col in windows_df.columns if col not in NON_MODEL_INPUT_COLUMNS)
+    if len(full_feature_columns) > 1:
+        baselines.append(BaselineSpec("logistic_full", full_feature_columns))
 
     return baselines
 
