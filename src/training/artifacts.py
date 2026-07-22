@@ -20,6 +20,8 @@ Output files:
 from __future__ import annotations
 
 import json
+import subprocess
+from importlib import metadata as importlib_metadata
 from pathlib import Path
 
 import pandas as pd
@@ -83,6 +85,65 @@ def write_run_outputs(
         "confusion_matrices": confusion,
         "diagnostics": diagnostics,
     }
+
+
+def aggregate_window_predictions(predictions_df: pd.DataFrame) -> pd.DataFrame:
+    """Collapse window-level predictions into video-level predictions.
+
+    Lives here (not in train.py) so torch-free callers — the sklearn-only
+    champion path and the Assignment 9 failure analysis — can aggregate
+    without importing the torch training stack.
+    """
+    prob_columns = [col for col in predictions_df.columns if col.startswith("prob_")]
+    aggregated = (
+        predictions_df.groupby(["subject_id", "video_id"], as_index=False)
+        .agg(
+            label=("label", "first"),
+            window_count=("window_idx", "count"),
+            **{prob_col: (prob_col, "mean") for prob_col in prob_columns},
+        )
+        .sort_values("video_id")
+        .reset_index(drop=True)
+    )
+
+    probabilities = aggregated[prob_columns]
+    aggregated["pred_label"] = probabilities.to_numpy().argmax(axis=1)
+    aggregated["confidence"] = probabilities.max(axis=1)
+    return aggregated
+
+
+def git_sha() -> str | None:
+    """Return the current commit SHA, or None if git is unavailable."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return None
+    return result.stdout.strip() or None
+
+
+def package_versions(used_wandb: bool) -> dict[str, str | None]:
+    """Installed versions of the packages a run's manifest should pin."""
+    packages = ["numpy", "pandas", "torch", "scikit-learn"]
+    if used_wandb:
+        packages.append("wandb")
+    versions: dict[str, str | None] = {"python": _python_version()}
+    for package in packages:
+        try:
+            versions[package] = importlib_metadata.version(package)
+        except importlib_metadata.PackageNotFoundError:
+            versions[package] = None
+    return versions
+
+
+def _python_version() -> str:
+    import sys
+
+    return f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
 
 
 def _concat(tables: list[pd.DataFrame]) -> pd.DataFrame:

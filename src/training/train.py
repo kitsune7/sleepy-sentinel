@@ -29,9 +29,7 @@ import copy
 import logging
 import math
 import random
-import subprocess
 from datetime import datetime, timezone
-from importlib import metadata as importlib_metadata
 from pathlib import Path
 
 import numpy as np
@@ -41,6 +39,7 @@ from torch.utils.data import DataLoader
 
 from evaluation import metrics
 from training import artifacts, baselines, dataset, models, splits, tracking
+from training.artifacts import aggregate_window_predictions
 from training.config import (
     CrossValidationConfig,
     ModelConfig,
@@ -472,26 +471,6 @@ def _selection_score(validation_metrics: dict[str, float]) -> float:
     return score
 
 
-def aggregate_window_predictions(predictions_df: pd.DataFrame) -> pd.DataFrame:
-    """Collapse window-level predictions into video-level predictions."""
-    prob_columns = [col for col in predictions_df.columns if col.startswith("prob_")]
-    aggregated = (
-        predictions_df.groupby(["subject_id", "video_id"], as_index=False)
-        .agg(
-            label=("label", "first"),
-            window_count=("window_idx", "count"),
-            **{prob_col: (prob_col, "mean") for prob_col in prob_columns},
-        )
-        .sort_values("video_id")
-        .reset_index(drop=True)
-    )
-
-    probabilities = aggregated[prob_columns]
-    aggregated["pred_label"] = probabilities.to_numpy().argmax(axis=1)
-    aggregated["confidence"] = probabilities.max(axis=1)
-    return aggregated
-
-
 def predict_split(model: torch.nn.Module, fold_data: FoldDatasets, split_name: str) -> pd.DataFrame:
     """Return window-level class probabilities with split metadata."""
     split = fold_data[split_name]
@@ -512,37 +491,10 @@ def _dataclass_dict(config: object) -> dict[str, object]:
     return {key: (list(value) if isinstance(value, tuple) else value) for key, value in asdict(config).items()}
 
 
-def _git_sha() -> str | None:
-    """Return the current commit SHA, or None if git is unavailable."""
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except (subprocess.CalledProcessError, OSError):
-        return None
-    return result.stdout.strip() or None
-
-
-def _package_versions(used_wandb: bool) -> dict[str, str | None]:
-    packages = ["numpy", "pandas", "torch", "scikit-learn"]
-    if used_wandb:
-        packages.append("wandb")
-    versions: dict[str, str | None] = {"python": _python_version()}
-    for package in packages:
-        try:
-            versions[package] = importlib_metadata.version(package)
-        except importlib_metadata.PackageNotFoundError:
-            versions[package] = None
-    return versions
-
-
-def _python_version() -> str:
-    import sys
-
-    return f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+# Moved to training.artifacts so torch-free callers can build manifests too;
+# re-exported under the old names for existing callers (train_temporal).
+_git_sha = artifacts.git_sha
+_package_versions = artifacts.package_versions
 
 
 def _build_manifest(

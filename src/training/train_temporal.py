@@ -32,10 +32,11 @@ import pandas as pd
 import torch
 
 from evaluation import metrics
-from training import baselines, temporal
+from training import baselines, sequence_models, temporal
+from training.artifacts import aggregate_window_predictions, git_sha, package_versions
 from training.config import RunResult
 from training.dataset import fit_preprocessor
-from training.train import _git_sha, _package_versions, set_random_seeds
+from training.train import set_random_seeds
 
 logger = logging.getLogger("training.train_temporal")
 
@@ -173,7 +174,7 @@ def _run_gru(
         for split_name in ("train", "validation", "test")
     }
 
-    model = temporal.GruVideoClassifier(
+    model = sequence_models.GruVideoClassifier(
         input_dim=len(feature_columns),
         hidden_dim=GRU_HIDDEN_DIM,
         dropout=GRU_DROPOUT,
@@ -266,7 +267,7 @@ def _train_gru_epoch(model, sequences_df, optimizer, loss_fn, generator) -> dict
 
     for start in range(0, len(order), GRU_BATCH_SIZE):
         batch = sequences_df.iloc[order[start : start + GRU_BATCH_SIZE]]
-        padded, lengths = temporal.pad_sequences(list(batch["features"]))
+        padded, lengths = sequence_models.pad_sequences(list(batch["features"]))
         targets = torch.tensor(batch["label"].to_numpy(), dtype=torch.long)
 
         optimizer.zero_grad()
@@ -285,7 +286,7 @@ def _train_gru_epoch(model, sequences_df, optimizer, loss_fn, generator) -> dict
 
 def _evaluate_gru(model, sequences_df, loss_fn) -> dict[str, float]:
     model.eval()
-    padded, lengths = temporal.pad_sequences(list(sequences_df["features"]))
+    padded, lengths = sequence_models.pad_sequences(list(sequences_df["features"]))
     targets = torch.tensor(sequences_df["label"].to_numpy(), dtype=torch.long)
     with torch.no_grad():
         logits = model(padded, lengths)
@@ -298,7 +299,7 @@ def _evaluate_gru(model, sequences_df, loss_fn) -> dict[str, float]:
 
 def _predict_gru_videos(model, sequences_df) -> pd.DataFrame:
     model.eval()
-    padded, lengths = temporal.pad_sequences(list(sequences_df["features"]))
+    padded, lengths = sequence_models.pad_sequences(list(sequences_df["features"]))
     with torch.no_grad():
         probabilities = torch.softmax(model(padded, lengths), dim=1).numpy()
 
@@ -312,9 +313,7 @@ def _predict_gru_videos(model, sequences_df) -> pd.DataFrame:
 
 
 def _aggregate_windows(predictions_df: pd.DataFrame) -> pd.DataFrame:
-    """Collapse window predictions to video predictions (mirrors train.py)."""
-    from training.train import aggregate_window_predictions
-
+    """Collapse window predictions to video predictions (shared with train.py)."""
     return aggregate_window_predictions(predictions_df)
 
 
@@ -442,8 +441,8 @@ def _write_manifest(
             "batch_size": GRU_BATCH_SIZE,
             "early_stopping_patience": GRU_PATIENCE,
         },
-        "package_versions": _package_versions(used_wandb=False),
-        "git_sha": _git_sha(),
+        "package_versions": package_versions(used_wandb=False),
+        "git_sha": git_sha(),
         "started_at": started_at,
         "ended_at": datetime.now(timezone.utc).isoformat(),
     }

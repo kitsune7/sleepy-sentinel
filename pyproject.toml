@@ -26,6 +26,7 @@ extract_features = "data_prep.extract_features:main"
 build_windows = "data_prep.windows:main"
 train_alertness = "training.train:main"
 train_temporal = "training.train_temporal:main"
+failure_analysis = "training.failure_analysis:main"
 
 [build-system]
 requires = ["hatchling"]

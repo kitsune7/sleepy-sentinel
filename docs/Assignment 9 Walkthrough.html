@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assignment 9 — A Guided Walkthrough</title>
+<style>
+  :root{
+    --ink:#1a1c22; --muted:#5b6472; --line:#e4e7ec; --bg:#fbfbfc;
+    --panel:#ffffff; --accent:#2f6f4f; --accent-soft:#e8f2ec;
+    --warn:#8a5a00; --warn-soft:#fdf3e0; --blue:#26507a; --blue-soft:#eaf1f8;
+    --good:#1f7a4d; --good-soft:#e6f4ec; --bad:#a3352f; --bad-soft:#fbeceb;
+    --code-bg:#1e2230; --code-ink:#e8ecf5;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    line-height:1.62; font-size:18px;
+  }
+  .wrap{max-width:820px; margin:0 auto; padding:48px 22px 120px;}
+  header.hero{margin-bottom:14px}
+  .kicker{font-family:ui-sans-serif,system-ui,sans-serif; letter-spacing:.14em; text-transform:uppercase; font-size:12px; color:var(--accent); font-weight:700}
+  h1{font-size:40px; line-height:1.12; margin:.25em 0 .1em; font-weight:700}
+  .subtitle{color:var(--muted); font-size:19px; margin:0 0 18px}
+  .meta{font-family:ui-sans-serif,system-ui,sans-serif; font-size:13px; color:var(--muted); border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:10px 0; display:flex; gap:22px; flex-wrap:wrap}
+  .meta b{color:var(--ink)}
+  nav.toc{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px 22px; margin:26px 0 8px; font-family:ui-sans-serif,system-ui,sans-serif}
+  nav.toc h4{margin:0 0 10px; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+  nav.toc ol{margin:0; padding-left:20px}
+  nav.toc li{margin:5px 0}
+  nav.toc a{color:var(--blue); text-decoration:none}
+  nav.toc a:hover{text-decoration:underline}
+  section{margin-top:52px; scroll-margin-top:16px}
+  h2{font-size:28px; margin:0 0 4px; font-weight:700; line-height:1.2}
+  h2 .num{color:var(--accent); font-family:ui-sans-serif,system-ui,sans-serif; font-size:15px; display:block; letter-spacing:.06em; margin-bottom:2px}
+  h3{font-size:20px; margin:30px 0 6px; font-weight:700}
+  p{margin:14px 0}
+  em{font-style:italic}
+  strong{font-weight:700}
+  a{color:var(--blue)}
+  code.inl{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:.86em; background:#eef0f4; padding:1px 6px; border-radius:5px; color:#2a2f3a}
+  pre{
+    background:var(--code-bg); color:var(--code-ink); border-radius:12px;
+    padding:18px 20px; overflow-x:auto; font-size:14px; line-height:1.55;
+    font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    white-space:pre; margin:18px 0; border:1px solid #2a2f42;
+  }
+  pre .c{color:#7d8bb0}    /* comment */
+  pre .k{color:#e0a458}    /* keyword */
+  pre .s{color:#8fd18c}    /* string */
+  pre .f{color:#78b6e8}    /* func/name */
+  pre .n{color:#d98fb8}    /* number */
+  .callout{border-radius:12px; padding:16px 20px; margin:20px 0; font-size:16.5px; font-family:ui-sans-serif,system-ui,sans-serif; line-height:1.55}
+  .callout .lab{font-weight:800; font-size:12px; letter-spacing:.1em; text-transform:uppercase; display:block; margin-bottom:5px}
+  .callout.def{background:var(--accent-soft); border:1px solid #cfe3d7}
+  .callout.def .lab{color:var(--accent)}
+  .callout.key{background:var(--blue-soft); border:1px solid #cfe0f0}
+  .callout.key .lab{color:var(--blue)}
+  .callout.edge{background:var(--warn-soft); border:1px solid #f0e0bf}
+  .callout.edge .lab{color:var(--warn)}
+  figure{margin:26px 0; }
+  figcaption{font-family:ui-sans-serif,system-ui,sans-serif; font-size:13.5px; color:var(--muted); text-align:center; margin-top:10px}
+  .diagram{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:24px 20px}
+  .flow{display:flex; align-items:stretch; gap:0; flex-wrap:wrap; justify-content:center; font-family:ui-sans-serif,system-ui,sans-serif}
+  .node{background:#fff; border:1.5px solid var(--line); border-radius:10px; padding:10px 12px; min-width:118px; text-align:center; box-shadow:0 1px 0 rgba(0,0,0,.02)}
+  .node .t{font-weight:700; font-size:14px}
+  .node .s{font-size:11.5px; color:var(--muted); margin-top:2px}
+  .arrow{display:flex; align-items:center; padding:0 8px; color:var(--accent); font-size:22px; font-weight:700}
+  .arrowwrap{display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 6px}
+  .arrowwrap .lbl{font-size:10px; color:var(--muted)}
+  table.data{border-collapse:collapse; width:100%; font-family:ui-sans-serif,system-ui,sans-serif; font-size:14px; margin:18px 0}
+  table.data th, table.data td{border:1px solid var(--line); padding:8px 10px; text-align:center}
+  table.data th{background:#f3f5f8; font-weight:700}
+  table.data td.name{text-align:left; font-weight:600}
+  table.data tr.hi td{background:var(--good-soft)}
+  table.data .win{color:var(--good); font-weight:700}
+  table.data .lose{color:var(--bad); font-weight:700}
+  .cmwrap{display:flex; gap:26px; flex-wrap:wrap; justify-content:center}
+  .cm{font-family:ui-sans-serif,system-ui,sans-serif; font-size:13px}
+  .cm h5{text-align:center; margin:0 0 8px; font-size:13px}
+  .cm table{border-collapse:collapse; margin:0 auto}
+  .cm td,.cm th{width:44px; height:40px; text-align:center; border:1px solid var(--line)}
+  .cm th{background:#f3f5f8; font-weight:700; font-size:11px}
+  .cm .diag{background:var(--good-soft); font-weight:700}
+  .cm .corner{background:var(--bad-soft); font-weight:700; color:var(--bad)}
+  .cm .mid{background:var(--blue-soft); font-weight:700; color:var(--blue)}
+  .cm .axis{font-size:10px; color:var(--muted); background:#fafbfc}
+  .bars{font-family:ui-sans-serif,system-ui,sans-serif; font-size:13px}
+  .bar-row{display:flex; align-items:center; gap:10px; margin:5px 0}
+  .bar-row .lab{width:170px; text-align:right; color:var(--ink)}
+  .bar-track{flex:1; background:#f0f2f5; border-radius:5px; height:22px; position:relative; overflow:hidden}
+  .bar-fill{height:100%; background:linear-gradient(90deg,#3f8f66,#2f6f4f); border-radius:5px}
+  .bar-fill.dim{background:linear-gradient(90deg,#9db4c6,#7d97ac)}
+  .bar-fill.bad{background:linear-gradient(90deg,#c96a63,#a3352f)}
+  .bar-row .val{width:44px; font-variant-numeric:tabular-nums; color:var(--muted)}
+  .quizblock{margin:26px 0 6px; background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden}
+  .quizblock > h4{margin:0; padding:14px 20px; background:#f5f7f9; border-bottom:1px solid var(--line); font-family:ui-sans-serif,system-ui,sans-serif; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+  .quiz{padding:18px 20px; border-bottom:1px solid var(--line); font-family:ui-sans-serif,system-ui,sans-serif}
+  .quiz:last-child{border-bottom:none}
+  .quiz .q{font-weight:700; font-size:16px; margin-bottom:12px}
+  .quiz .q .qn{color:var(--accent); margin-right:6px}
+  .opt{display:block; width:100%; text-align:left; background:#fff; border:1.5px solid var(--line); border-radius:9px; padding:10px 14px; margin:7px 0; font-size:15px; cursor:pointer; transition:.12s; font-family:inherit; color:var(--ink)}
+  .opt:hover{border-color:#b9c2cf; background:#fafbfc}
+  .opt.correct{border-color:var(--good); background:var(--good-soft)}
+  .opt.wrong{border-color:var(--bad); background:var(--bad-soft)}
+  .opt.reveal-correct{border-color:var(--good); background:var(--good-soft)}
+  .opt .mark{float:right; font-weight:800}
+  .opt.correct .mark::after{content:"✓"; color:var(--good)}
+  .opt.wrong .mark::after{content:"✕"; color:var(--bad)}
+  .fb{margin-top:10px; padding:12px 14px; border-radius:9px; font-size:14.5px; display:none; line-height:1.5}
+  .fb.show{display:block}
+  .fb.ok{background:var(--good-soft); border:1px solid #bfe0cc}
+  .fb.no{background:var(--bad-soft); border:1px solid #edc9c6}
+  .fb b{color:inherit}
+  hr.sep{border:none; border-top:1px solid var(--line); margin:34px 0}
+  .tag{display:inline-block; font-family:ui-sans-serif,system-ui,sans-serif; font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; background:var(--accent-soft); color:var(--accent); vertical-align:middle}
+  .filelist{font-family:ui-sans-serif,system-ui,sans-serif; font-size:14.5px; list-style:none; padding:0; margin:18px 0}
+  .filelist li{padding:11px 14px; border:1px solid var(--line); border-radius:9px; margin:7px 0; background:var(--panel)}
+  .filelist .fn{font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:13px; font-weight:700; color:var(--blue)}
+  .filelist .fd{color:var(--muted); font-size:13.5px; margin-top:3px}
+  .pill{font-family:ui-sans-serif,system-ui,sans-serif; font-size:11px; font-weight:700; padding:1px 7px; border-radius:5px; margin-left:6px}
+  .pill.new{background:var(--good-soft); color:var(--good)}
+  .pill.edit{background:var(--warn-soft); color:var(--warn)}
+  .pill.doc{background:var(--blue-soft); color:var(--blue)}
+  .progress{position:sticky; top:0; height:4px; background:transparent; z-index:50}
+  .progress > div{height:100%; width:0; background:var(--accent); transition:width .1s}
+  .footnote{font-family:ui-sans-serif,system-ui,sans-serif; font-size:13px; color:var(--muted); margin-top:40px; border-top:1px solid var(--line); padding-top:16px}
+  /* timeline strip for the truncation diagram */
+  .strip{display:flex; gap:3px; align-items:flex-end; height:90px; padding:8px 4px 0; font-family:ui-sans-serif,system-ui,sans-serif}
+  .strip .w{flex:1; background:#d7e3db; border-radius:3px 3px 0 0; position:relative; min-width:4px}
+  .strip .w.cut{background:#e8d8d6; opacity:.45}
+  .strip .w.hot{background:var(--bad)}
+  .strip .w.warm{background:#d99a4e}
+  .striplab{display:flex; justify-content:space-between; font-family:ui-sans-serif,system-ui,sans-serif; font-size:11px; color:var(--muted); padding:6px 4px 0}
+  /* level-axis diagram for the miss directions */
+  .axisbox{position:relative; height:120px; margin:8px 10px}
+  .axisline{position:absolute; left:0; right:0; top:78px; height:3px; background:linear-gradient(90deg,#7d97ac,#d99a4e,#a3352f); border-radius:2px}
+  .axistick{position:absolute; top:86px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; color:var(--muted); transform:translateX(-50%)}
+  .axisdot{position:absolute; top:60px; width:14px; height:14px; border-radius:50%; transform:translateX(-50%); border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,.25)}
+  .axisnote{position:absolute; font-family:ui-sans-serif,system-ui,sans-serif; font-size:11.5px; color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:7px; padding:4px 8px; transform:translateX(-50%); text-align:center}
+</style>
+</head>
+<body>
+<div class="progress"><div id="pbar"></div></div>
+<div class="wrap">
+
+<header class="hero">
+  <div class="kicker">CS 6320 · Portfolio Project · Sleepy Sentinel</div>
+  <h1>Assignment 9, End to End</h1>
+  <p class="subtitle">The autopsy week: no new model, no new data — just the champion, its mistakes, and an honest account of who those mistakes would hurt.</p>
+  <div class="meta">
+    <span><b>Part A</b> Evidence snapshot</span>
+    <span><b>Part B</b> Failure analysis</span>
+    <span><b>Part C</b> Audit-to-failure trace</span>
+    <span><b>Part D</b> Sequence &amp; attention decision</span>
+    <span><b>Part E</b> Week 10 handoff</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <h4>What we'll walk through</h4>
+  <ol>
+    <li><a href="#s1">The autopsy week: what Assignment 9 actually asks</a></li>
+    <li><a href="#s2">Slicing the misses: who are the 39 low-vigilant failures?</a></li>
+    <li><a href="#s3">Corners and confidence: the errors that matter most</a></li>
+    <li><a href="#s4">The cold-start probe: testing a blind spot the dataset can't show</a></li>
+    <li><a href="#s5">What the lecture was for: sequences, attention, and the decision card</a></li>
+    <li><a href="#s6">Parts C and E: tracing risks and handing off to Week 10</a></li>
+    <li><a href="#s7">The code: what changed in the repo and what you're turning in</a></li>
+  </ol>
+</nav>
+
+<!-- ============================ SECTION 1 ============================ -->
+<section id="s1">
+  <h2><span class="num">Section 1</span>The autopsy week: what Assignment 9 actually asks</h2>
+
+  <p>Every assignment so far has ended with a scoreboard: floors in A6, a champion in A7, a better champion in A8. Assignment 9 inverts the question. It does not ask whether the model is good; it asks, with some insistence, <em>where it is bad, for whom, and whether we saw it coming</em>. The professor's framing rules out the obvious temptation up front: this is <strong>not a new sequence-modeling build</strong>. The Week 9 lecture covers RNNs, LSTMs, GRUs, and attention — but only so you can decide, in one part of one memo, whether those ideas are risks or tools for <em>your</em> project. The main work happens in the evidence you already have.</p>
+
+  <p>The memo has five parts, and they form a pipeline of their own: snapshot where the project stands (A), find concrete failure patterns and trace them to the people affected (B), check those failures against the risks you predicted back in the Assignment 4 audit (C), decide whether time and attention concepts matter here (D), and hand Week 10 a table of decision-ready evidence rows (E).</p>
+
+  <div class="diagram">
+    <div class="flow">
+      <div class="node"><div class="t">Part A</div><div class="s">where we stand</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="t">Part B</div><div class="s">how it fails, who's hurt</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="t">Part C</div><div class="s">did the audit predict it?</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="t">Part D</div><div class="s">does time/attention matter?</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="t">Part E</div><div class="s">rows for Week 10's verdict</div></div>
+    </div>
+    <figcaption>The memo's five parts. Everything flows toward Part E, whose rows feed Assignment 10's deployment judgment.</figcaption>
+  </div>
+
+  <p>The grading emphasis contains one phrase worth taping to the monitor: <strong>evidence-first</strong>. "Do not only say that the model is biased, risky, or weak; show the model behavior that supports the claim." A failure analysis that says "the middle class is hard" is a vibe. One that says "the 39 missed low-vigilant videos split 25 toward alert and 14 toward drowsy, the two groups differ in their starting eyelid levels by a factor of 2.4, and the model is <em>more</em> confident on the misses than the hits" is evidence. This week's job is turning the first kind of sentence into the second kind.</p>
+
+  <div class="callout def">
+    <span class="lab">Definition · Failure analysis</span>
+    A failure analysis decomposes an aggregate score into <em>named patterns of error</em> — slices, subgroups, conditions, directions, time periods — each backed by concrete model behavior, each connected to a likely cause and a stakeholder consequence. The aggregate says how often you're wrong; the failure analysis says <em>when, about whom, in which direction, and how sure you sounded</em>.
+  </div>
+
+  <p>Conveniently, Assignment 8 already wrote this week's to-do list. Its handoff named two priority questions and a four-item examination list, and they map almost one-to-one onto the four analyses we ran:</p>
+
+  <table class="data">
+    <tr><th>A8 handoff question</th><th>A9 analysis</th><th>Artifact</th></tr>
+    <tr><td class="name">Who are the still-missed low-vigilant videos?</td><td>Miss slicing: direction, confidence, landmark quality, drift shape</td><td><code class="inl">a9_low_vigilant_miss_*.csv</code></td></tr>
+    <tr><td class="name">Does the session-baseline assumption fail dangerously?</td><td>Cold-start truncation probe + window-position accuracy</td><td><code class="inl">a9_cold_start_*.csv</code>, <code class="inl">a9_window_position_accuracy.csv</code></td></tr>
+    <tr><td class="name">Did trend features change <em>which</em> videos sit in the corner?</td><td>Corner-migration trace, A7 vs A8</td><td><code class="inl">a9_corner_migration.csv</code></td></tr>
+    <tr><td class="name">Does the confidence gap survive per-class inspection?</td><td>Calibration by predicted class and correctness</td><td><code class="inl">a9_calibration_by_class.csv</code></td></tr>
+  </table>
+
+  <p>One design decision was made before any code: the one experiment A8 still had planned — the CORN ordinal head — stays <em>unrun</em>. The assignment says analysis, not modeling, and running it this week would blur the line the professor drew. It appears in Part E as the highest-value action for Week 10 instead. Discipline about scope is itself part of the rubric.</p>
+
+  <p>Everything else this week is reading tables we already had, plus one new computation that only <em>scores</em> — never trains — and Section 4 will show why that distinction is the whole point of the probe's design. First, though, the misses.</p>
+
+  <div class="quizblock">
+    <h4>Check yourself · Section 1</h4>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q1.</span>Assignment 9's core demand is that the failure analysis be "evidence-first." What does that mean in practice?</div>
+      <button class="opt" data-correct="false" data-fb="More metrics on the same aggregate axis are still aggregates. Evidence-first is about decomposing the score into named, concrete error patterns.">Report more aggregate metrics (add AUC and Spearman to QWK and accuracy).</button>
+      <button class="opt" data-correct="true" data-fb="Exactly. A claim like 'the model is weak on the middle class' must be backed by the specific behavior: which videos, which direction the errors go, how confident the model was, and what covariates separate hits from misses.">Every claimed weakness must be shown as specific model behavior — which cases fail, in which direction, with what confidence — not just asserted.</button>
+      <button class="opt" data-correct="false" data-fb="The assignment explicitly says this is not a new modeling build. Evidence-first is about how you support claims, not about running new models.">Train several new models so each claim has experimental evidence.</button>
+      <button class="opt" data-correct="false" data-fb="Stakeholder consequences are required too — but they must be anchored to observed model behavior. Consequences without evidence is exactly the failure mode the rubric warns about.">Lead every section with the stakeholder harm and fill in numbers where convenient.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q2.</span>Why did the CORN ordinal-head experiment get deferred to Week 10 rather than run this week?</div>
+      <button class="opt" data-correct="false" data-fb="CORN is cheap to run on this pipeline — the reason is scope, not cost.">It's too computationally expensive to run alongside the analyses.</button>
+      <button class="opt" data-correct="true" data-fb="Right. The assignment defines this week as failure analysis of the current strategy, not a modeling week. Running CORN now would blur that scope; naming it as Week 10's top action keeps the memo aligned with what was asked.">Assignment 9 is explicitly an analysis week, not a build week — so CORN is named as the top Week 10 action instead.</button>
+      <button class="opt" data-correct="false" data-fb="A8 kept CORN as the one planned experiment; nothing this week invalidated it. In fact the calibration finding made it more valuable.">The A9 evidence showed ordinal methods can't help this project.</button>
+      <button class="opt" data-correct="false" data-fb="CORN is an ordinal classification head, not a sequence model — the lecture's no-new-sequence-model guidance doesn't even apply to it.">Because CORN is a sequence model and those were ruled out.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q3.</span>How do the four A9 analyses relate to Assignment 8?</div>
+      <button class="opt" data-correct="true" data-fb="Yes — A8's handoff literally listed them: slice the low-vigilant misses, probe the cold-start blind spot, check corner membership, and inspect calibration per class. A9 executes that list rather than inventing a new agenda.">They are the questions A8's handoff explicitly prioritized; A9 executes that list.</button>
+      <button class="opt" data-correct="false" data-fb="They reuse A8's saved artifacts and folds — continuity with prior evidence is the point, not a fresh start.">They start fresh so that A8's assumptions don't contaminate the analysis.</button>
+      <button class="opt" data-correct="false" data-fb="Only the cold-start probe computes anything new, and it scores rather than trains. Three of four analyses just slice saved CSVs.">Each one requires retraining the champion under new conditions.</button>
+      <button class="opt" data-correct="false" data-fb="The professor's spec lists categories of failure patterns but doesn't know this project; the specific questions came from A8's own evidence.">They were dictated by the professor's list of required failure patterns.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q4.</span>An aggregate metric like QWK 0.484 ± 0.399 cannot, by itself, tell you which of the following?</div>
+      <button class="opt" data-correct="false" data-fb="It can — the ± band across folds is exactly the stability story (and at n=60 it's a headline, not a footnote).">Whether performance is stable across held-out subjects.</button>
+      <button class="opt" data-correct="false" data-fb="Comparing against the majority/luminance floors answers that, and those numbers are aggregates too.">Whether the model beats a trivial baseline.</button>
+      <button class="opt" data-correct="true" data-fb="Correct. Direction of error, which class absorbs it, and how confident the model sounded while wrong are invisible in a single scalar — that's precisely what Part B's slices, corner traces, and calibration tables exist to reveal.">Which class absorbs the errors, in which direction they point, and how confident the model was when wrong.</button>
+      <button class="opt" data-correct="false" data-fb="QWK's quadratic weighting means its value does reflect how far apart disagreements are — in aggregate. What it hides is who and in which specific direction.">Whether disagreements tend to be near or far apart on the ordinal scale, on average.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q5.</span>Why does Part E exist, given that Parts B and C already contain all the findings?</div>
+      <button class="opt" data-correct="false" data-fb="It's not a summary for this memo's reader — it's structured input for a different document: Assignment 10's evidence table and deployment judgment.">It summarizes the memo for readers who skip to the end.</button>
+      <button class="opt" data-correct="true" data-fb="Exactly. Week 10 must assemble a portfolio evidence table and a preliminary deploy/revise/limit/don't-use judgment. Part E pre-formats this week's findings as rows that table can absorb directly — strongest evidence, worst failure, top risk, missing evidence, and a preliminary implication.">Assignment 10 needs decision-ready evidence rows, and Part E formats this week's findings so they can be reused directly.</button>
+      <button class="opt" data-correct="false" data-fb="Part E is required for every project, whatever the findings — and this project's implication ended up being 'limit to decision support,' not 'do not use.'">It's only needed if the model failed badly enough to block deployment.</button>
+      <button class="opt" data-correct="false" data-fb="Grading emphasizes useful handoff rows, but the deeper reason is functional: A10 literally consumes them.">It's a formality the rubric awards points for.</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ SECTION 2 ============================ -->
+<section id="s2">
+  <h2><span class="num">Section 2</span>Slicing the misses: who are the 39 low-vigilant failures?</h2>
+
+  <p>Start with what we knew on Monday: the champion recognizes 21 of 60 low-vigilant videos. That number was A8's headline improvement (up from 14), and also its loudest remaining complaint — the early-warning class is still the one the model gets wrong most. A9's first question is the natural next one: are the 39 misses <em>a crowd or a pattern</em>?</p>
+
+  <p>The method is the workhorse of all failure analysis: take the champion's saved per-video predictions, keep only the true-low-vigilant rows, and join on everything we know about each video that might explain its fate. Four covariate families were chosen, each encoding a specific suspicion:</p>
+
+  <table class="data">
+    <tr><th>Covariate</th><th>Suspicion it tests</th></tr>
+    <tr><td class="name">Predicted class + confidence + probability margin</td><td>Which <em>direction</em> do misses go, and does the model know it's struggling?</td></tr>
+    <tr><td class="name"><code class="inl">frac_face_missing</code> (mean per video)</td><td>Are misses just low-quality videos where MediaPipe lost the face?</td></tr>
+    <tr><td class="name">Key drift features (mean and final value)</td><td>Do missed videos have unusual <em>trajectories</em> — flat, or runaway?</td></tr>
+    <tr><td class="name">First-minute eyelid levels (<code class="inl">start_blink_dur_max</code>, <code class="inl">start_perclos</code>)</td><td>Do missed videos already look alert/fatigued at their own start?</td></tr>
+  </table>
+
+  <p>The code is short because the idea is short. Label each low-vigilant video by its outcome, then merge in the covariates and compare group means (from <code class="inl">slice_low_vigilant_misses</code> in <code class="inl">failure_analysis.py</code>):</p>
+
+<pre><span class="f">low_vig</span>[<span class="s">"outcome"</span>] = np.<span class="f">select</span>(
+    [low_vig[<span class="s">"pred_label"</span>] == <span class="n">1</span>, low_vig[<span class="s">"pred_label"</span>] == <span class="n">0</span>],
+    [<span class="s">"hit"</span>, <span class="s">"missed_as_alert"</span>],
+    default=<span class="s">"missed_as_drowsy"</span>,
+)
+<span class="c"># How far the true class fell short of the winner (0 for hits).</span>
+low_vig[<span class="s">"true_class_margin"</span>] = low_vig[<span class="s">"prob_1"</span>] - low_vig[[<span class="s">"prob_0"</span>, <span class="s">"prob_1"</span>, <span class="s">"prob_2"</span>]].<span class="f">max</span>(axis=<span class="n">1</span>)</pre>
+
+  <p>And here is what the comparison found. Three groups, three different stories:</p>
+
+  <table class="data">
+    <tr><th>Outcome</th><th>n</th><th>Mean confidence</th><th>Start blink_dur_max</th><th>Final blink_dur_max drift</th><th>frac_face_missing</th></tr>
+    <tr class="hi"><td class="name">Hit</td><td>21</td><td>0.437</td><td>0.232</td><td>−0.023</td><td>0.0006</td></tr>
+    <tr><td class="name">Missed as alert</td><td>25</td><td class="lose">0.512</td><td>0.132</td><td>−0.020</td><td>0.0006</td></tr>
+    <tr><td class="name">Missed as drowsy</td><td>14</td><td class="lose">0.614</td><td>0.314</td><td class="lose">+0.098</td><td>0.0005</td></tr>
+  </table>
+
+  <p>Read the <code class="inl">start_blink_dur_max</code> column first, because it carries the plot. The videos missed as <em>alert</em> open with eyelid dynamics at 0.13 — quieter than the hits' 0.23 — and never develop a trend. They look alert from minute one and keep looking alert. The videos missed as <em>drowsy</em> open at 0.31 — already elevated — and their drift keeps <em>climbing</em> (+0.098 at session end). That rising drift is, almost verbatim, the "runaway drift" signature that A8's coefficient table assigns to full drowsiness. The model isn't being random; it's reading each borderline video's eyelid <em>level and trajectory</em> and placing it on whichever side of the midpoint it most resembles.</p>
+
+  <div class="diagram">
+    <div class="axisbox">
+      <div class="axisnote" style="left:18%; top:0">25 misses<br>look like this</div>
+      <div class="axisnote" style="left:50%; top:0">21 hits</div>
+      <div class="axisnote" style="left:84%; top:0">14 misses<br>look like this</div>
+      <div class="axisdot" style="left:14%; background:#7d97ac"></div>
+      <div class="axisdot" style="left:21%; background:#7d97ac"></div>
+      <div class="axisdot" style="left:27%; background:#7d97ac"></div>
+      <div class="axisdot" style="left:46%; background:#d99a4e"></div>
+      <div class="axisdot" style="left:52%; background:#d99a4e"></div>
+      <div class="axisdot" style="left:58%; background:#d99a4e"></div>
+      <div class="axisdot" style="left:79%; background:#a3352f"></div>
+      <div class="axisdot" style="left:86%; background:#a3352f"></div>
+      <div class="axisdot" style="left:92%; background:#a3352f"></div>
+      <div class="axisline"></div>
+      <div class="axistick" style="left:8%">alert-like levels</div>
+      <div class="axistick" style="left:50%">ordinal midpoint</div>
+      <div class="axistick" style="left:90%">drowsy-like levels</div>
+    </div>
+    <figcaption>All 60 true-low-vigilant videos, conceptually arranged by eyelid level and trajectory. The class is a band in the middle of a continuum; sessions near either edge get pulled to the neighboring class.</figcaption>
+  </div>
+
+  <p>Now the second finding, which is the uncomfortable one. Look back at the confidence column. The model averages 0.437 confidence when it gets low-vigilant <em>right</em> — and 0.512 / 0.614 when it gets it <em>wrong</em>, with individual misses reaching 0.92. Confidence rises as the video drifts away from the ambiguous middle toward a clean-looking (but incorrect) neighboring profile. The errors aren't hesitant errors. They're the model's most assured statements about this class.</p>
+
+  <div class="callout key">
+    <span class="lab">Key idea · Overconfident errors are worse than frequent ones</span>
+    A user can live with an aid that says "not sure" often. What breaks trust is an aid that's <em>most certain</em> precisely when it's wrong. For the class this project exists to catch early, higher confidence currently signals a <em>higher</em> chance of error — which is why Part B rates this failure pattern's severity by its confidence behavior, not just its count.
+  </div>
+
+  <p>The third finding is a negative, and negatives deserve equal billing: <strong>landmark quality is exonerated</strong>. Mean <code class="inl">frac_face_missing</code> is 0.0005–0.0006 across hits and both miss groups — indistinguishable, and tiny. The misses are not videos where MediaPipe lost the face. Likewise, misses scatter across 39 different subjects, and a subject missing their low-vigilant video is barely more likely to also miss their drowsy one (15/39 vs 10/21). No convenient "it's just bad subjects" story survives contact with the table.</p>
+
+  <div class="callout def">
+    <span class="lab">Definition · Negative evidence</span>
+    A slicing analysis that finds <em>no difference</em> between groups is not a failed analysis — it eliminates a candidate cause. Ruling out landmark quality moves the likely explanation toward the label itself: KSS 6–7 ("low-vigilant") genuinely sits between its neighbors, and some sessions live near a boundary for their entire recording. That distinction — quality problem vs. inherent ambiguity — changes what Week 10 should recommend.
+  </div>
+
+  <p>What the evidence <em>cannot</em> settle is whether the remaining misses are irreducible midpoint ambiguity or a representation still missing some cue — the dataset publishes only the 3-way class, not each video's exact KSS score, so we can't check whether missed-as-alert videos were the KSS-6 end and missed-as-drowsy the KSS-7 end. That gap goes in the memo's "missing evidence" column, where honest analyses put the things they wish they knew.</p>
+
+  <div class="quizblock">
+    <h4>Check yourself · Section 2</h4>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q1.</span>The 39 low-vigilant misses split 25 toward alert and 14 toward drowsy. What did the covariate analysis show about these two groups?</div>
+      <button class="opt" data-correct="false" data-fb="frac_face_missing was essentially identical across hits and both miss groups — quality was exonerated, not implicated.">Both groups have unusually high frac_face_missing, pointing to landmark quality.</button>
+      <button class="opt" data-correct="true" data-fb="Exactly. Missed-as-alert videos open with low eyelid dynamics and stay flat; missed-as-drowsy videos open elevated and keep deteriorating (positive final drift — the drowsy signature). The errors track each video's level and trajectory across the midpoint.">They differ systematically in starting eyelid level and drift trajectory — each group resembles the class it was mistaken for.</button>
+      <button class="opt" data-correct="false" data-fb="The misses scatter across 39 distinct subjects; no subject concentration is possible at video level since each subject has exactly one low-vigilant video.">They concentrate in a handful of problem subjects.</button>
+      <button class="opt" data-correct="false" data-fb="It's the reverse — the model is more confident on the misses (0.51–0.61) than the hits (0.44).">The model shows unusually low confidence on both miss groups.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q2.</span>Why is the confidence pattern (misses at 0.51–0.61, hits at 0.44) called <em>inverted</em>, and why does it matter?</div>
+      <button class="opt" data-correct="true" data-fb="Right. Confidence should be higher when the model is correct; here it's higher when wrong, because borderline videos that resemble a neighboring class produce cleaner (but wrong) probability profiles. Any warning gate thresholded on confidence would fire preferentially on mistakes.">Confidence is higher on wrong predictions than right ones, so a confidence-thresholded warning would favor the mistakes.</button>
+      <button class="opt" data-correct="false" data-fb="0.44 exceeds the 3-class floor of 0.33 — the issue isn't the absolute level but the ordering between correct and incorrect.">Because 0.44 is below the random-guessing floor for three classes.</button>
+      <button class="opt" data-correct="false" data-fb="Calibration wasn't applied at all yet — this is raw softmax behavior, and the inversion is the argument for doing calibration work.">Because temperature scaling flipped the sign of the gap.</button>
+      <button class="opt" data-correct="false" data-fb="The inversion is specifically about the low-vigilant class; alert and drowsy still show the normal (positive) gap.">Because the model is overconfident on every class equally.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q3.</span>What makes the frac_face_missing result worth reporting even though it found nothing?</div>
+      <button class="opt" data-correct="false" data-fb="It wasn't inconclusive — it was a clear no-difference result across groups, which is informative.">It isn't worth reporting; inconclusive analyses pad the memo.</button>
+      <button class="opt" data-correct="true" data-fb="Exactly. Eliminating data quality as the cause shifts the explanation toward inherent midpoint ambiguity — a different problem with a different remedy (hedged output bands, ordinal-aware training) than 'collect cleaner video.'">It eliminates a candidate cause, which redirects both the likely explanation and the appropriate fix.</button>
+      <button class="opt" data-correct="false" data-fb="The gate already dropped windows with >30% missing frames back in preprocessing; this analysis was about whether residual quality variation explains video-level misses. It doesn't.">It proves the preprocessing validity gate was never needed.</button>
+      <button class="opt" data-correct="false" data-fb="frac_face_missing is deliberately excluded from model inputs per the charter — it's a diagnostic covariate, so there's nothing to remove.">It justifies removing frac_face_missing from the model's features.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q4.</span>The missed-as-drowsy group shows <em>positive final drift</em> (+0.098). Why is that detail so diagnostic?</div>
+      <button class="opt" data-correct="false" data-fb="Positive drift means the signal is rising relative to the session's own baseline — it says nothing about landmark tracking quality.">It indicates the landmarker was drifting off the face late in those videos.</button>
+      <button class="opt" data-correct="true" data-fb="Yes. A8's coefficients encode 'elevated but stable = low-vigilant, still worsening = drowsy.' These videos are elevated AND still worsening, so the model applies its learned drowsy signature — the miss is the model's own rule working on a video that straddles the rule's boundary.">Rising drift is exactly the learned drowsy signature, so the model is applying its own (usually correct) rule to boundary videos.</button>
+      <button class="opt" data-correct="false" data-fb="Drift is computed causally within each session; it can't be an artifact of the train/test split.">It reveals leakage between training and test folds.</button>
+      <button class="opt" data-correct="false" data-fb="These are true low-vigilant videos whose dynamics continue worsening — if anything it suggests the session was heading toward drowsy, i.e., near-boundary, not mislabeled at random.">It proves those 14 videos were labeled by a different annotator.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q5.</span>Which single piece of missing information would most directly test the "irreducible midpoint ambiguity" explanation?</div>
+      <button class="opt" data-correct="false" data-fb="More subjects would shrink variance but wouldn't tell you whether these specific misses sit at the ambiguous ends of the label band.">More subjects in the dataset.</button>
+      <button class="opt" data-correct="true" data-fb="Right. The classes were binned from KSS: low-vigilant ≈ 6–7. If missed-as-alert videos turned out to be KSS 6 and missed-as-drowsy KSS 7, the misses are the label band's own edges — ambiguity, not model failure. Without per-video KSS this stays an open question, so it goes in the missing-evidence column.">Each video's underlying KSS score, to see whether misses cluster at the band's edges (6 vs 7).</button>
+      <button class="opt" data-correct="false" data-fb="Attention maps belong to a model family this project rejected — and wouldn't say anything about the labels.">Attention maps from a transformer trained on the same data.</button>
+      <button class="opt" data-correct="false" data-fb="The luminance columns are the lighting confound check — a different, already-settled question.">The luminance values for the missed videos.</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ SECTION 3 ============================ -->
+<section id="s3">
+  <h2><span class="num">Section 3</span>Corners and confidence: the errors that matter most</h2>
+
+  <p>The charter decided long ago which errors are unforgivable: the <em>corners</em>, where a truly alert video is called drowsy or — much worse for this use case — a truly drowsy video is called alert. Adjacent confusion is the cost of doing business on an ordinal scale; corner mass is the failure that would make the aid worse than nothing. A7 reported 17 corner errors out of 180 videos. A8 reported… also 17. Case closed, nothing moved?</p>
+
+  <p>This is where aggregate thinking quietly lies to you. Seventeen equals seventeen, but a count is not a set. The corner-migration analysis pivots the two models' predictions side by side per video and asks which <em>specific videos</em> occupy the corner under each:</p>
+
+<pre><span class="f">anchor_corner</span> = (wide[<span class="s">"label"</span>] - wide[<span class="s">"pred_logistic_full_anchor"</span>]).<span class="f">abs</span>() == <span class="n">2</span>
+<span class="f">trend_corner</span>  = (wide[<span class="s">"label"</span>] - wide[<span class="s">"pred_trend_logistic"</span>]).<span class="f">abs</span>() == <span class="n">2</span>
+
+corners[<span class="s">"category"</span>] = np.<span class="f">select</span>(
+    [anchor_corner &amp; trend_corner, anchor_corner],
+    [<span class="s">"persistent"</span>, <span class="s">"fixed_by_trends"</span>],
+    default=<span class="s">"introduced_by_trends"</span>,
+)</pre>
+
+  <p>The answer: only <strong>13 of the 17 are the same videos</strong>. Four true-drowsy videos that the anchor dumped in the alert corner were pulled out by the trend features (04/10, 06/10, 09/10, 16/10 — three rescued to low-vigilant, one all the way to correct). And four <em>new</em> corners appeared, including 53/10, a drowsy video the anchor classified <em>correctly</em> that the trend model now calls alert.</p>
+
+  <div class="diagram">
+    <div style="display:flex; gap:14px; flex-wrap:wrap; justify-content:center; font-family:ui-sans-serif,system-ui,sans-serif">
+      <div style="flex:1; min-width:190px; border:1.5px solid #edc9c6; border-radius:10px; padding:12px 14px; background:var(--bad-soft)">
+        <div style="font-weight:800; color:var(--bad); font-size:13px; text-transform:uppercase; letter-spacing:.05em">Persistent · 13</div>
+        <div style="font-size:13.5px; color:var(--muted); margin-top:4px">Corner under <em>both</em> models. Nine are drowsy→alert; four are alert→drowsy. Trend features never touched them.</div>
+      </div>
+      <div style="flex:1; min-width:190px; border:1.5px solid #bfe0cc; border-radius:10px; padding:12px 14px; background:var(--good-soft)">
+        <div style="font-weight:800; color:var(--good); font-size:13px; text-transform:uppercase; letter-spacing:.05em">Fixed by trends · 4</div>
+        <div style="font-size:13.5px; color:var(--muted); margin-top:4px">04/10, 06/10, 09/10, 16/10 — all true-drowsy, all lifted out of the alert corner.</div>
+      </div>
+      <div style="flex:1; min-width:190px; border:1.5px solid #f0e0bf; border-radius:10px; padding:12px 14px; background:var(--warn-soft)">
+        <div style="font-weight:800; color:var(--warn); font-size:13px; text-transform:uppercase; letter-spacing:.05em">Introduced · 4</div>
+        <div style="font-size:13.5px; color:var(--muted); margin-top:4px">20/0, 45/0 (alert→drowsy) and 34/10, 53/10 (drowsy→alert). 53/10 was <em>correct</em> under the anchor.</div>
+      </div>
+    </div>
+    <figcaption>Corner membership, A7 anchor vs A8 champion. The count held at 17; the set churned by 8 videos — the trend features re-rank borderline sessions rather than resolving them.</figcaption>
+  </div>
+
+  <p>Direction matters as much as membership. Of the champion's 17 corners, <strong>11 are drowsy-called-alert</strong> and 6 are alert-called-drowsy. For a fatigue aid these are not symmetric mistakes: alert-called-drowsy is an annoying false alarm; drowsy-called-alert is the aid staying silent while its user is most impaired — a silent failure at 6% of all videos (11/180). This single number does more to cap what the project can responsibly claim than any aggregate metric in the portfolio.</p>
+
+  <div class="callout edge">
+    <span class="lab">Edge case · Stability of a count ≠ stability of behavior</span>
+    Whenever two models tie on a summary statistic, ask whether they tie on the <em>instances</em>. Equal counts with churning membership means the decision boundary moved through a populated region — some cases crossed in each direction. That's a materially different (and less comforting) situation than a boundary that left everything untouched, and you can only see it by joining predictions per instance.
+  </div>
+
+  <h3>Confidence, conditioned on what the model is about to do</h3>
+
+  <p>The second half of this section revisits A8's calibration note with a sharper lens. A8 reported one aggregate gap: mean confidence 0.575 on correct videos vs 0.520 on incorrect — small but positive. The A9 analysis conditions on <em>predicted class</em> instead, and the reason is stakeholder-shaped: a warning gate doesn't experience "average confidence." It experiences confidence <em>at the moment the model proposes a specific label</em>. The question that matters is: when the model says <em>drowsy</em>, how much should we believe it — and does its confidence distinguish its right calls from its wrong ones?</p>
+
+  <div class="diagram">
+    <div class="bars">
+      <div class="bar-row"><span class="lab">predicts alert · correct (44)</span><div class="bar-track"><div class="bar-fill" style="width:57.6%"></div></div><span class="val">0.576</span></div>
+      <div class="bar-row"><span class="lab">predicts alert · wrong (36)</span><div class="bar-track"><div class="bar-fill dim" style="width:52.0%"></div></div><span class="val">0.520</span></div>
+      <div class="bar-row" style="margin-top:12px"><span class="lab">predicts low-vig · correct (21)</span><div class="bar-track"><div class="bar-fill" style="width:43.7%"></div></div><span class="val">0.437</span></div>
+      <div class="bar-row"><span class="lab">predicts low-vig · wrong (24)</span><div class="bar-track"><div class="bar-fill bad" style="width:47.3%"></div></div><span class="val">0.473</span></div>
+      <div class="bar-row" style="margin-top:12px"><span class="lab">predicts drowsy · correct (35)</span><div class="bar-track"><div class="bar-fill" style="width:65.5%"></div></div><span class="val">0.655</span></div>
+      <div class="bar-row"><span class="lab">predicts drowsy · wrong (20)</span><div class="bar-track"><div class="bar-fill dim" style="width:57.6%"></div></div><span class="val">0.576</span></div>
+    </div>
+    <figcaption>trend_logistic confidence by predicted class and correctness. Alert and drowsy keep a positive gap. Low-vigilant inverts: wrong predictions are <em>more</em> confident than right ones (red bar).</figcaption>
+  </div>
+
+  <p>Alert and drowsy behave respectably — correct predictions carry more confidence, by +0.056 and +0.079. Then the middle class: correct low-vigilant calls average 0.437 while <em>incorrect</em> ones average 0.473. The aggregate gap A8 saw was real, but it was the average of two healthy classes and one inverted one. Any threshold rule of the form "warn when confidence &gt; τ" applied to this class selects for mistakes. That upgrades calibration work — temperature scaling, or CORN's cumulative probabilities, plus a reliability check — from the someday pile to the single blocking item before any user-facing warning behavior. It's the top action row in Part E.</p>
+
+  <div class="callout key">
+    <span class="lab">Key idea · Condition diagnostics on the action, not the average</span>
+    Diagnostics should be sliced the way decisions will be made. A deployed aid acts per prediction, so calibration must hold <em>per predicted class</em>. An aggregate that pools three classes can hide a sign flip in exactly the class your product exists to serve — which is precisely what happened here.
+  </div>
+
+  <div class="quizblock">
+    <h4>Check yourself · Section 3</h4>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q1.</span>A7 and A8 both show 17 corner errors. What did the migration analysis reveal about that apparent stability?</div>
+      <button class="opt" data-correct="false" data-fb="The count is identical — that's exactly why the per-video comparison was needed to see anything at all.">The A8 count was actually higher once ties were handled properly.</button>
+      <button class="opt" data-correct="true" data-fb="Right — only 13 videos are corners under both models; 4 were fixed and 4 introduced. Equal counts, churning membership: the boundary moved through populated territory rather than staying put.">Only 13 of the 17 are the same videos — 4 corners were fixed and 4 new ones introduced.</button>
+      <button class="opt" data-correct="false" data-fb="Corner errors are video-level by definition here; windows were already aggregated before any of this.">The corners are window-level artifacts that vanish at video level.</button>
+      <button class="opt" data-correct="false" data-fb="Both corner directions exist under both models — 11 drowsy→alert and 6 alert→drowsy under the champion.">All 17 corners point in the same direction under both models.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q2.</span>Why is drowsy-called-alert treated as categorically worse than alert-called-drowsy for this project?</div>
+      <button class="opt" data-correct="false" data-fb="QWK penalizes both corners identically — the asymmetry comes from the use case, not the metric.">Because QWK weights that direction more heavily.</button>
+      <button class="opt" data-correct="true" data-fb="Exactly. A false alarm costs annoyance; a silent miss means the aid says nothing at the moment its user is most impaired and least able to self-judge — the exact scenario the tool exists to prevent. 11 of the champion's 17 corners point this way.">A false alarm is an annoyance; a silent miss defeats the aid's entire purpose at the moment the user most needs it.</button>
+      <button class="opt" data-correct="false" data-fb="Frequency isn't the reason — and even if it were rarer, the asymmetry in consequence would remain.">Because it happens more rarely, so each instance is more surprising.</button>
+      <button class="opt" data-correct="false" data-fb="Confidence behavior compounds the problem but isn't what makes the direction worse; the harm asymmetry is inherent to the use case.">Because the model is more confident in that direction.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q3.</span>The calibration analysis conditions on <em>predicted</em> class rather than true class. Why?</div>
+      <button class="opt" data-correct="true" data-fb="Yes. At decision time the system knows its prediction and its confidence — never the true label. A warning gate fires on 'model says drowsy with confidence c,' so the diagnostic must measure trustworthiness conditioned on exactly that information.">Because a deployed gate only ever knows the prediction and the confidence — so trust must be measured given what's knowable at decision time.</button>
+      <button class="opt" data-correct="false" data-fb="True-class conditioning is useful for other questions (like recall analysis) — but it conditions on information a deployed system doesn't have.">Because conditioning on true class is statistically invalid.</button>
+      <button class="opt" data-correct="false" data-fb="Sample sizes per predicted class are similar to per true class; convenience isn't the reason.">Because predicted-class groups are larger and give tighter estimates.</button>
+      <button class="opt" data-correct="false" data-fb="The inversion was found *because* of predicted-class conditioning, not assumed beforehand.">Because the analysis already knew the middle class was inverted.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q4.</span>A8's aggregate confidence gap was positive (0.575 vs 0.520). How can that coexist with an inverted gap for low-vigilant?</div>
+      <button class="opt" data-correct="false" data-fb="Both numbers are computed from the same predictions — no recomputation disagreement is involved.">It can't; one of the two computations must be wrong.</button>
+      <button class="opt" data-correct="true" data-fb="Right — the aggregate pools all three predicted classes. Alert and drowsy have healthy positive gaps and more videos, so their average swamps the middle class's small negative gap. Slicing reveals what pooling hides.">The aggregate pools three classes; two healthy positive gaps outweigh one small inverted one.</button>
+      <button class="opt" data-correct="false" data-fb="Fold weighting isn't the mechanism — class pooling is. The aggregate mixes predicted-alert, -low-vigilant, and -drowsy rows together.">The aggregate weights folds unequally while the per-class view doesn't.</button>
+      <button class="opt" data-correct="false" data-fb="Both use the same softmax max-probability definition of confidence.">The two use different definitions of confidence.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q5.</span>Video 53/10 (true drowsy) was correct under the anchor and is an alert-corner error under the champion. What's the right lesson to draw?</div>
+      <button class="opt" data-correct="false" data-fb="One video regression doesn't overturn the A8 decision — the champion still fixed four corners and improved the middle class overall. The lesson is about how improvements behave, not whether this one was wrong.">The A8 adoption decision was a mistake and should be reversed.</button>
+      <button class="opt" data-correct="false" data-fb="There's no evidence of mislabeling — and the anchor classifying it correctly argues the video contains real drowsy signal.">53/10 is probably mislabeled and should be excluded.</button>
+      <button class="opt" data-correct="true" data-fb="Exactly. A representation change moves the decision boundary globally; videos near the boundary can cross in either direction even as the average improves. That's why per-instance regression checks belong in failure analysis — aggregate wins can contain individual, high-severity losses.">Model improvements are boundary movements: individual cases can regress — dangerously — inside an aggregate win, which is why instance-level tracking matters.</button>
+      <button class="opt" data-correct="false" data-fb="Trend features helped the corner problem's drowsy side on net (4 fixed vs 2 introduced in that direction) — the point is churn, not net harm.">Trend features made the corner problem strictly worse.</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ SECTION 4 ============================ -->
+<section id="s4">
+  <h2><span class="num">Section 4</span>The cold-start probe: testing a blind spot the dataset can't show</h2>
+
+  <p>Assignment 8 introduced the drift features and, in the same breath, confessed their structural weakness. <code class="inl">drift</code> measures each window's departure from <em>the session's own start</em>. So a user who opens the aid <em>already drowsy</em> has drift ≈ 0 on precisely the features that flag drowsiness — the session's start <em>is</em> their fatigued state, so nothing has "drifted." The feared consequence: the aid fails hardest on the person who needs it most, and the dataset can never reveal this, because every UTA-RLDD video holds one constant label from first frame to last. There are no recordings of someone becoming drowsy mid-session, and none that begin mid-episode.</p>
+
+  <p>When your data cannot exhibit a failure mode, you have two honest options: declare it untested, or <em>simulate</em> it and be explicit about the simulation's limits. A8's handoff proposed the simulation: score sessions that are truncated to <em>begin</em> partway through a recording. A drowsy video with its first quarter removed is a crude but fair stand-in for "the user opened the aid already fatigued" — the model meets elevated eyelid dynamics with no calm baseline to compare against.</p>
+
+  <div class="diagram">
+    <div class="strip" id="trunc-strip"></div>
+    <div class="striplab"><span>← removed: first 25% (the "warm-up" the model never sees)</span><span>session as the model sees it →</span></div>
+    <figcaption>One drowsy session, truncated. The faded windows are deleted <em>before</em> trend features are computed, so the cut point becomes window 0: drift restarts from an already-fatigued baseline, exactly as it would for a real mid-episode session start.</figcaption>
+  </div>
+
+  <p>The implementation has three load-bearing decisions, each easy to get subtly wrong:</p>
+
+  <p><strong>First: truncate the test videos only.</strong> The question is how the <em>deployed</em> model — trained once, on full sessions — behaves when a user starts mid-episode. Truncating training data would answer a different question (could we <em>train</em> on truncated sessions?) and would also break the anchor comparison. So each fold's model is fit exactly as in A8, and only its test subject's windows are cut.</p>
+
+  <p><strong>Second: restart the clock at the cut.</strong> It is not enough to drop rows. The kept windows are renumbered from zero so that <code class="inl">elapsed_min</code>, the rolling deltas, and the expanding drift baseline all treat the cut point as the session's beginning. Skip the renumbering and the recomputed features would quietly remember the deleted past:</p>
+
+<pre><span class="k">def</span> <span class="f">truncate_video_windows</span>(windows_df, fraction):
+    <span class="c">"""Drop the first `fraction` of each video's windows and restart the clock."""</span>
+    ordered = windows_df.<span class="f">sort_values</span>([<span class="s">"video_id"</span>, <span class="s">"window_idx"</span>]).<span class="f">copy</span>()
+    position = ordered.<span class="f">groupby</span>(<span class="s">"video_id"</span>).<span class="f">cumcount</span>()
+    video_sizes = ordered.<span class="f">groupby</span>(<span class="s">"video_id"</span>)[<span class="s">"window_idx"</span>].<span class="f">transform</span>(<span class="s">"size"</span>)
+    kept = ordered[position &gt;= np.<span class="f">floor</span>(video_sizes * fraction).<span class="f">astype</span>(<span class="k">int</span>)].<span class="f">copy</span>()
+    kept[<span class="s">"window_idx"</span>] = kept.<span class="f">groupby</span>(<span class="s">"video_id"</span>).<span class="f">cumcount</span>()  <span class="c"># the cut is the new t=0</span>
+    <span class="k">return</span> kept.<span class="f">reset_index</span>(drop=<span class="k">True</span>)</pre>
+
+  <p>A unit test pins the property that matters: after truncation + trend recomputation, every drift and delta feature at the first kept window is exactly 0, and <code class="inl">elapsed_min</code> is 0 — the model has genuinely forgotten the removed history.</p>
+
+  <p><strong>Third: prove the probe reproduces the champion before reading anything else.</strong> This is A8's anchor discipline applied again. The probe includes truncation fraction 0.0 — no cut at all — and its 180 video predictions must match the saved A8 champion run. They do: every predicted label identical, probabilities within 5×10⁻³ (the analysis ran under a different sklearn/Python version than A8; the graded check in <code class="inl">a9_manifest.json</code> records both facts, and a re-run in the pinned <code class="inl">uv</code> environment is expected to match to solver precision). Only after that check do the truncated numbers mean anything.</p>
+
+  <div class="callout def">
+    <span class="lab">Definition · Reproduction anchor</span>
+    Before comparing a new run against saved evidence, re-run a configuration whose answer you already know and confirm it matches. If the known case reproduces, differences in the unknown cases are attributable to your intervention (here: truncation) rather than to drifted code, seeds, or environments. A8 used this to link its runs to A7; A9 uses it to link the probe to A8. The chain now spans A5→A9.
+  </div>
+
+  <h3>What the probe found</h3>
+
+  <table class="data">
+    <tr><th>Truncation</th><th>Accuracy</th><th>Alert recall</th><th>Low-vigilant recall</th><th>Drowsy recall</th></tr>
+    <tr class="hi"><td class="name">0% (reproduces A8)</td><td>0.556</td><td>44/60</td><td><b>21/60</b></td><td>35/60</td></tr>
+    <tr><td class="name">25%</td><td>0.483</td><td>39/60</td><td class="lose">14/60</td><td>34/60</td></tr>
+    <tr><td class="name">50%</td><td>0.517</td><td>41/60</td><td>17/60</td><td>35/60</td></tr>
+  </table>
+
+  <p>Two findings, and they point in opposite emotional directions.</p>
+
+  <p><strong>The feared failure did not materialize.</strong> Drowsy recall is 35, 34, 35 across the three conditions — essentially flat. Deleting the calm warm-up does not blind the model to drowsiness, because the <em>level</em> features (blink durations, PERCLOS) carry that detection on their own. The model does not need to watch you deteriorate to call you drowsy; it can see long, slow blinks in absolute terms. The worst-case story from A8 — "the aid fails exactly on the already-drowsy user" — is, on this simulation, wrong. That's worth saying plainly, because failure analyses are allowed to deliver good news when the evidence says so.</p>
+
+  <p><strong>But the A8 gain turns out to live entirely in the warm-up.</strong> Low-vigilant recall drops from 21 to 14 at 25% truncation — and 14/60 is <em>precisely the A7 anchor's number</em>. Cut the first quarter of the session and the trend features stop helping the one class they were adopted to help; the champion degrades to last assignment's model exactly where this assignment's improvement was claimed. The middle class, we now know from Section 2, is discriminated by <em>trajectory relative to baseline</em> — and trajectory-relative-to-baseline is the very thing a cold start deletes.</p>
+
+  <p>A corroborating check needs no simulation at all: within ordinary, untruncated sessions, window-level accuracy in the first position decile is the worst for every class (alert 0.59 vs ≈0.70 mid-session; low-vigilant 0.27 vs ≈0.33 late; drowsy 0.48 vs ≈0.55). Early-session predictions are measurably weaker in the real data, not just under surgery. The deployment consequence writes itself: the aid's first minutes are reduced-accuracy, the user must be told, and sessions should ideally begin near one's alert baseline — an assumption that now sits, named and quantified, in the audit trail.</p>
+
+  <div class="callout edge">
+    <span class="lab">Edge case · The simulation's own fine print</span>
+    The probe truncates <em>acted, constant-label</em> recordings. It cannot manufacture a session that genuinely transitions alert→drowsy mid-recording, and the non-monotonic wobble (25% slightly worse than 50%) is within noise at 60 videos per class — the memo declines to interpret it. Simulated evidence earns a Medium-High confidence tag in Part E, not High: strong enough to require a deployment caveat, too weak to fully settle the blind spot.
+  </div>
+
+  <div class="quizblock">
+    <h4>Check yourself · Section 4</h4>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q1.</span>Why can't the cold-start blind spot be tested directly on UTA-RLDD, without simulation?</div>
+      <button class="opt" data-correct="false" data-fb="Video length isn't the obstacle — ten minutes is plenty. The obstacle is what the labels do (or rather, don't do) within each video.">The videos are too short to contain a session start and a fatigue episode.</button>
+      <button class="opt" data-correct="true" data-fb="Right. Every video carries one constant label throughout — nobody transitions between states on camera, and no recording begins mid-episode. So 'user starts the aid already fatigued relative to a calm baseline' never occurs naturally in the data; it has to be constructed by truncation.">Every video has a single constant label, so no recording shows a mid-episode session start or a state transition.</button>
+      <button class="opt" data-correct="false" data-fb="The features are computable everywhere; the problem is that the *scenario* (fatigued start) doesn't exist in the data, not that features fail on it.">The drift features can't be computed on drowsy videos.</button>
+      <button class="opt" data-correct="false" data-fb="LOSO is about which subjects are held out — it doesn't prevent any within-video analysis.">The LOSO protocol forbids reusing test videos for diagnostics.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q2.</span>Why does the probe truncate only the <em>test</em> videos, never the training data?</div>
+      <button class="opt" data-correct="true" data-fb="Exactly. The deployed model will have been trained once, on whatever data existed; the question is how *that* model behaves when a session starts mid-episode. Truncating training would answer a different question and break comparability with the saved A8 run.">Because the question is how the already-trained, deployed model handles a mid-episode start — training conditions aren't what's being probed.</button>
+      <button class="opt" data-correct="false" data-fb="Cost isn't the issue — truncated training would actually be *less* data. The issue is which question gets answered.">Truncating training data would be too computationally expensive.</button>
+      <button class="opt" data-correct="false" data-fb="Truncation doesn't leak anything — it only removes information. The design choice is about matching the deployment question.">Truncating training data would cause leakage between folds.</button>
+      <button class="opt" data-correct="false" data-fb="The trend features recompute fine on truncated data — that's precisely what the probe does on the test side.">Trend features can't be computed on truncated training videos.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q3.</span>After dropping the first quarter of a video's windows, the code renumbers <code class="inl">window_idx</code> from 0. What would go wrong without this step?</div>
+      <button class="opt" data-correct="false" data-fb="Aggregation groups by video_id, not window_idx — the video-level averaging would still work mechanically.">Video-level aggregation would crash on the gap in indices.</button>
+      <button class="opt" data-correct="true" data-fb="Yes. elapsed_min is computed from window_idx, and the trend recomputation treats the first row per video as the session start. Without renumbering, the features would encode a session that's already 2.5 minutes old — the model would effectively remember history the simulation is supposed to have deleted.">The recomputed features would still encode the deleted past — elapsed time and baselines wouldn't reflect a true cold start.</button>
+      <button class="opt" data-correct="false" data-fb="Labels ride along per row regardless of numbering.">The labels would no longer align with the windows.</button>
+      <button class="opt" data-correct="false" data-fb="The scaler operates on feature values, not on window_idx.">The StandardScaler would produce NaNs for missing indices.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q4.</span>Drowsy recall stayed ≈35/60 under truncation while low-vigilant recall fell 21→14. What does this contrast reveal about where each class's signal lives?</div>
+      <button class="opt" data-correct="false" data-fb="If drowsy depended on drift, deleting the baseline would have hurt it most — the opposite of what happened.">Both classes depend on drift; drowsy just has more headroom.</button>
+      <button class="opt" data-correct="true" data-fb="Exactly. Drowsiness is visible in absolute level features (long blinks, high PERCLOS) that need no baseline; low-vigilance is defined by *elevated-but-stable relative to one's own start*, which is unmeasurable without the start. The cold start deletes exactly the middle class's discriminating information — and 14/60 is precisely the pre-trend champion's number.">Drowsy is detectable from absolute levels; low-vigilant depends on trajectory relative to a session baseline, which truncation removes.</button>
+      <button class="opt" data-correct="false" data-fb="The same model scored all conditions; nothing about class weighting changed with truncation.">Class weights shifted when videos got shorter.</button>
+      <button class="opt" data-correct="false" data-fb="The 25%-vs-50% wobble is noise, but the 21→14 drop reproducing the anchor's exact number is a structured, explainable result — not noise.">The drop is random variation and shouldn't be interpreted.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q5.</span>The truncation-0.0 run matched all 180 saved predictions by label but probabilities differed by up to 0.005. How did the analysis handle this, and why is that the right call?</div>
+      <button class="opt" data-correct="false" data-fb="Silently passing would hide a real (if benign) environment difference; silently failing would wrongly invalidate a probe whose decisions match perfectly.">Round the probabilities so the strict check passes.</button>
+      <button class="opt" data-correct="true" data-fb="Right. The check reports a graded result — labels identical, max probability deviation, strict-tolerance flag — in the manifest. A different sklearn/Python version shifts solver output by O(1e-3) without changing behavior; recording both facts preserves honesty and lets the pinned environment verify exactness later.">Report a graded result (labels identical; max prob deviation 0.005; strict tolerance failed) and attribute it to the version difference in the manifest.</button>
+      <button class="opt" data-correct="false" data-fb="Discarding the probe would waste valid evidence — the decisions, which are what every downstream metric uses, reproduced exactly.">Discard the probe results since reproduction technically failed.</button>
+      <button class="opt" data-correct="false" data-fb="Retraining A8 under the new environment would break the A5→A8 evidence chain to fix a cosmetic mismatch — backwards priorities.">Regenerate the A8 artifacts under the new environment so they match.</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ SECTION 5 ============================ -->
+<section id="s5">
+  <h2><span class="num">Section 5</span>What the lecture was for: sequences, attention, and the decision card</h2>
+
+  <p>Week 9's lecture walks through recurrent models and attention — hidden states, LSTM gates, GRU gates, encoder-decoder attention with its score/normalize/read loop. None of it asks to be implemented. Its role in Assignment 9 is stranger and more useful: it hands you a <em>vocabulary of risks</em>, then asks whether your project speaks that language. Part D is a seven-field decision card; this section walks the concepts and then fills the card.</p>
+
+  <h3>The concepts, compressed to what this project needs</h3>
+
+  <p><strong>Order changes the problem.</strong> The moment rows stop being exchangeable — the moment "which came before" carries information — random shuffling becomes a lie and evaluation must respect time. Our windows have been ordered all along (that's what <code class="inl">window_idx</code> is), and A8's trend features are exactly a wager that order matters. It paid: the only middle-class improvement in five assignments came from features describing <em>how a window compares to its session's past</em>.</p>
+
+  <p><strong>Recurrent models carry state.</strong> An RNN reuses one learned update across positions, threading a hidden state <em>h<sub>t</sub></em> forward as compressed memory; LSTMs and GRUs add learned gates that control what's kept, written, and exposed, taming the vanishing-gradient problem over long spans. This project met that family personally in A8: a small GRU read each video's full window sequence and lost to the linear model on every metric, early-stopping at a median of epoch 6 — the unmistakable signature of a sequence model memorizing 150 training videos rather than learning from them.</p>
+
+  <p><strong>Attention builds a per-step context.</strong> Instead of forcing a whole input sequence into one final state, attention keeps every encoder annotation, then — at each output step — <em>scores</em> them against the decoder's state, <em>normalizes</em> the scores with a softmax, and <em>reads</em> a weighted sum. The lecture's worked example (indexed retrieval) shows both its power (0.98 token accuracy vs 0.17 without attention) and its trap: on sequences longer than training, the model still attends — confidently — to the <em>wrong positions</em>. Attention improves the information pathway; it does not guarantee the pathway is used correctly.</p>
+
+  <div class="callout key">
+    <span class="lab">Key idea · Attention-based overinterpretation</span>
+    Attention weights look like explanations — bright cells on a heatmap, "the model looked <em>here</em>." The lecture's long-sequence failure case is the antidote: a model can attend to the wrong thing while producing a beautiful, confident map. Reading meaning into attention weights fit on tiny data is a named responsible-AI risk in this assignment, and it's one reason the decision card below declines the whole model family at n=60 subjects.
+  </div>
+
+  <p><strong>Temporal leakage makes evaluation lie.</strong> The lecture's checklist: What is the prediction time? Which features exist by then? Which entities repeat across records? A random split over time-ordered data lets future-derived clues into training; repeated entities let identity stand in for signal. This project's versions of those questions were answered in earlier weeks — but Part D requires saying so explicitly, with evidence.</p>
+
+  <h3>Filling in the decision card</h3>
+
+  <table class="data">
+    <tr><th style="width:44%">Card field</th><th>Answer</th><th>Evidence</th></tr>
+    <tr><td class="name">Does order/time/history affect the target?</td><td><b>Yes</b></td><td>Trend features moved low-vigilant recall 14→21/60 — history carries signal</td></tr>
+    <tr><td class="name">Does evaluation respect deployment time?</td><td><b>Yes</b></td><td>Trend features are causal by construction; a unit test edits window <em>t</em>+1 and asserts features at <em>t</em> are unchanged</td></tr>
+    <tr><td class="name">Could repeated entities/histories leak across splits?</td><td><b>No</b></td><td>Subject-wise LOSO with coded disjointness assertion; per-subject normalization uses own frames only; train-fold-only scaling</td></tr>
+    <tr><td class="name">Feature window vs label window</td><td>Stated</td><td>Before prediction: current 15 s window + session history (trends need ~1 min warm-up). The "label" is the session's constant self-reported state — a dataset simplification, not a future observation</td></tr>
+    <tr><td class="name">Could behavioral-history use harm stakeholders?</td><td><b>Yes, if misused</b></td><td>Same features could profile others → charter limits: self-monitoring, consent, on-device, no retention. Plus the subtler harm: cold-start (missing-context) outputs are measurably weaker and must not present as full-strength</td></tr>
+    <tr><td class="name">Are attention/sequence methods relevant?</td><td><b>Sequence: tested &amp; rejected. Attention: ruled out untested</b></td><td>GRU lost on every metric at n=60; attention adds capacity on top of that and invites weight-overinterpretation</td></tr>
+    <tr><td class="name">Decision</td><td colspan="2"><b>Include the temporal/cold-start risk in the final evidence base; pursue no further sequence or attention modeling</b></td></tr>
+  </table>
+
+  <p>The interesting subtlety is the last-but-one row. Rejecting the GRU was <em>empirical</em> — it ran and lost. Rejecting attention is <em>inferential</em> — it never ran. Is that legitimate? The argument has three legs: attention-augmented models strictly add parameters to the sequence family that just failed for having too many; every added-capacity model across this whole project (MLP in A6, GRU in A8) has lost to a linear model on a better representation; and the temporal signal the data does contain proved simple enough for hand-built trends to capture. Testing attention would cost real time to answer a question whose every available signpost points the same way — and Part D's job is exactly this kind of justified triage, not reflexive experimentation.</p>
+
+  <p>Notice also what the card does <em>not</em> say. It doesn't say "time is irrelevant" — the opposite: time mattered enough to change the champion and to create this week's headline risk (warm-up dependence). The lecture's dichotomy — is your project sequential or not? — turns out to have a third answer this project embodies: <em>the signal is temporal, but the model needn't be</em>. Causal feature engineering moved the time-structure into columns a linear model can read, keeping interpretability and statistical honesty at a data scale where sequence learners drown.</p>
+
+  <div class="quizblock">
+    <h4>Check yourself · Section 5</h4>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q1.</span>The decision card answers "does evaluation respect deployment time?" with evidence from a unit test. What does that test actually check?</div>
+      <button class="opt" data-correct="false" data-fb="Subject disjointness is asserted too, but by the split code — the causality test is about time within a video.">That train and test subjects never overlap.</button>
+      <button class="opt" data-correct="true" data-fb="Right. The test corrupts windows after position t and asserts every trend feature at positions ≤ t is bit-identical. If any feature at t could see the future, a live aid's offline evaluation would be flattered by information it will never have at deployment time.">That editing a later window can never change trend features at earlier windows — no feature sees the future.</button>
+      <button class="opt" data-correct="false" data-fb="Fold loading and anchor reproduction are separate protocol checks; the causality test is specifically about future-peeking within sessions.">That the saved folds file loads with the same subject assignments.</button>
+      <button class="opt" data-correct="false" data-fb="Wall-clock speed isn't an evaluation-validity concern here; information flow is.">That inference runs fast enough for real-time use.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q2.</span>The lecture's attention example succeeds on same-length lookups (0.98) but fails on longer sequences — while still producing confident attention maps. What risk does this illustrate for practitioners?</div>
+      <button class="opt" data-correct="true" data-fb="Exactly — attention weights read like explanations, but a model can attend to wrong positions with total confidence outside its training regime. Treating the maps as ground-truth explanation is the 'attention-based overinterpretation' risk the assignment names.">Attention maps look like explanations even when the model is attending to the wrong thing, so they invite overinterpretation.</button>
+      <button class="opt" data-correct="false" data-fb="Attention clearly helped in-distribution (0.17 → 0.98) — the lesson is about what the weights *mean*, not whether the mechanism works.">Attention mechanisms don't actually improve accuracy.</button>
+      <button class="opt" data-correct="false" data-fb="Softmax normalization is fine; the failure is generalization beyond training lengths, not arithmetic.">The softmax in attention is numerically unstable on long sequences.</button>
+      <button class="opt" data-correct="false" data-fb="The failure occurs at inference on longer inputs — it's a generalization limit, not a training-data leak.">Attention leaks future tokens into the encoder.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q3.</span>Why does the card treat rejecting the GRU and rejecting attention differently?</div>
+      <button class="opt" data-correct="false" data-fb="Both are rejected — the difference is the *kind* of justification each rejection rests on.">It doesn't; both are rejected on identical grounds.</button>
+      <button class="opt" data-correct="true" data-fb="Yes. The GRU rejection is empirical (it ran, it lost, median best-epoch 6). The attention rejection is inferential: it strictly adds capacity to a family that just failed for excess capacity, at a data scale where every added-capacity model has lost. The card makes the inference explicit rather than pretending it was tested.">The GRU was tested and lost; attention is ruled out by explicit inference from the capacity evidence, and the card says so.</button>
+      <button class="opt" data-correct="false" data-fb="Attention *can* apply to classification (attend over windows before the video-level head) — applicability isn't the objection; capacity at n=60 is.">Attention doesn't apply to classification tasks at all.</button>
+      <button class="opt" data-correct="false" data-fb="The lecture explicitly does NOT require building attention models — it requires deciding whether they're relevant.">The professor required attention be tested, so its rejection is provisional.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q4.</span>"The signal is temporal, but the model needn't be." What does this summary mean concretely for this project?</div>
+      <button class="opt" data-correct="false" data-fb="The GRU *was* the temporal-model attempt, and it lost — the point is that the winning approach captures time differently.">The GRU captures the temporal signal better than any alternative.</button>
+      <button class="opt" data-correct="true" data-fb="Exactly. Causal feature engineering (delta, slope, drift, elapsed time) moves the time structure into ordinary columns, so a memoryless linear model reads history without carrying state. Temporal information is preserved; sequence-model capacity and opacity are not paid for.">Cross-window history is encoded as causal features in each row, so a stateless linear model can use time without being a sequence model.</button>
+      <button class="opt" data-correct="false" data-fb="Order matters a great deal — it's what the trend features encode. What's avoided is the recurrent *architecture*, not the temporal *information*.">Window order can be ignored because the aggregation averages everything anyway.</button>
+      <button class="opt" data-correct="false" data-fb="Elapsed time is one of the 28 added features (elapsed_min) — but the claim covers the whole trend family: deltas, slopes, and drifts relative to session history.">The model only needs the elapsed time, not any other history.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q5.</span>The card flags behavioral-history harms even though this is a self-monitoring tool. Which listed harm is a direct consequence of this week's <em>evidence</em>, rather than a hypothetical misuse?</div>
+      <button class="opt" data-correct="false" data-fb="Profiling others is the hypothetical-misuse harm — real, but mitigated by charter constraints (consent, self-monitoring only), not discovered by this week's data.">Using the trend features to profile coworkers.</button>
+      <button class="opt" data-correct="false" data-fb="The charter's on-device, no-retention design addresses recording concerns — again a designed-away hypothetical, not a measured finding.">Raw video being transmitted to a server.</button>
+      <button class="opt" data-correct="true" data-fb="Right. The cold-start probe *measured* it: with no session history, the aid degrades on the early-warning class (21→14) while presenting output identically. Decisions made on missing context, presented at full apparent strength, is a harm the evidence quantified this week.">Missing-context decisions: early-session output is measurably weaker but looks identical to the user.</button>
+      <button class="opt" data-correct="false" data-fb="Nothing in the pipeline stores or shares identity; that risk was designed out in A4 and no new evidence touched it.">Re-identification of subjects from published features.</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ SECTION 6 ============================ -->
+<section id="s6">
+  <h2><span class="num">Section 6</span>Parts C and E: tracing risks and handing off to Week 10</h2>
+
+  <p>Part B established what fails. Part C asks a more reflective question: <em>did we predict it?</em> The mechanism is a trace — pick prior audit risks, assumptions, and success criteria, then classify each against this week's evidence using a five-word vocabulary: <strong>confirmed</strong>, <strong>weakened</strong>, <strong>revised</strong>, <strong>still untested</strong>, or <strong>newly discovered</strong>. The point isn't bookkeeping. A project whose failures were all foreseen in its audit has a working risk process; one whose failures are all surprises does not. This project turns out to be mostly — not entirely — the first kind.</p>
+
+  <div class="diagram">
+    <div style="font-family:ui-sans-serif,system-ui,sans-serif; font-size:14px">
+      <div style="display:flex; gap:10px; align-items:center; margin:8px 0"><div style="min-width:210px; font-weight:700">Luminance confound (A4)</div><div class="arrow" style="font-size:16px">→</div><div style="flex:1; color:var(--muted)">luminance-only ≈ chance; errors track eyelids, not lighting</div><span class="pill new" style="min-width:104px; text-align:center">WEAKENED ✓</span></div>
+      <div style="display:flex; gap:10px; align-items:center; margin:8px 0"><div style="min-width:210px; font-weight:700">Midpoint ambiguity (A6→)</div><div class="arrow" style="font-size:16px">→</div><div style="flex:1; color:var(--muted)">misses split by level across midpoint, overconfident</div><span class="pill doc" style="min-width:104px; text-align:center">CONFIRMED</span></div>
+      <div style="display:flex; gap:10px; align-items:center; margin:8px 0"><div style="min-width:210px; font-weight:700">Session-baseline assumption (A8)</div><div class="arrow" style="font-size:16px">→</div><div style="flex:1; color:var(--muted)">drowsy robust; middle-class gain is warm-up-dependent</div><span class="pill edit" style="min-width:104px; text-align:center">REVISED</span></div>
+      <div style="display:flex; gap:10px; align-items:center; margin:8px 0"><div style="min-width:210px; font-weight:700">Cohort skew / subgroups (A4)</div><div class="arrow" style="font-size:16px">→</div><div style="flex:1; color:var(--muted)">no demographic columns exist; no slice computable</div><span class="pill edit" style="min-width:104px; text-align:center">UNTESTED</span></div>
+      <div style="display:flex; gap:10px; align-items:center; margin:8px 0"><div style="min-width:210px; font-weight:700">Confidence as warning gate (A5/A6)</div><div class="arrow" style="font-size:16px">→</div><div style="flex:1; color:var(--muted)">per-class view shows inverted gap on low-vigilant</div><span class="pill doc" style="min-width:104px; text-align:center">CONFIRMED+</span></div>
+    </div>
+    <figcaption>The five Part C traces. Each connects an audit-era concern to this week's evidence and a classification.</figcaption>
+  </div>
+
+  <p>Two traces deserve a closer look, because they show the vocabulary doing real work.</p>
+
+  <p><strong>The session-baseline trace is "revised," not "confirmed" — and the difference is the finding.</strong> A8 predicted a specific failure: drift-blindness on already-drowsy users. The probe found the prediction half-right. The mechanism is real (drift features do go silent at a cold start) but the consequence landed elsewhere — drowsy detection survives on level features; it's the <em>middle class</em> that pays. Classifying this as "revised based on new evidence" records that the risk model itself was corrected, which is exactly the audit-maintenance behavior the assignment is trying to teach.</p>
+
+  <p><strong>The cohort-skew trace is "still untested" — with a sharper reason than last time.</strong> Earlier memos could say subgroup analysis "hadn't been done yet." This week's version is stronger: it <em>cannot</em> be done from current artifacts, because the feature table deliberately carries no demographic columns, and producing them means manually annotating raw videos that stay local by privacy design. An honest "untested" with a named obstacle caps the recommendation scope (personal use, single user) far more credibly than a hand-wave — evidence of absence of evidence, as it were.</p>
+
+  <div class="callout def">
+    <span class="lab">Definition · The deployment-judgment vocabulary</span>
+    Week 10 will place this project on a five-point scale: <em>deploy</em>, <em>revise</em>, <em>limit to decision support</em>, <em>do not use</em>, or <em>too uncertain to judge</em>. "Limit to decision support" means the system may inform a human's judgment but must not act autonomously (no auto-firing warnings) and must not be relied on where being wrong is unrecoverable. Part E's job is to stock that judgment with rows of evidence — for and against — so Week 10 argues from a table, not a feeling.
+  </div>
+
+  <p>Part E assembles the ledger: seven rows pairing each observation with its stakeholder implication, a confidence grade, and an action. In compressed form:</p>
+
+  <table class="data">
+    <tr><th>Row</th><th>Core content</th><th>Confidence</th></tr>
+    <tr><td class="name">Strongest supporting evidence</td><td>Champion beats all floors under LOSO; anchor-verified chain A5→A9; causality unit-tested</td><td>High (protocol) / Medium (effect size — 22/60 folds at QWK ≤ 0)</td></tr>
+    <tr><td class="name">Worst failure evidence</td><td>Low-vigilant 21/60 with inverted confidence; misses track the midpoint</td><td>High</td></tr>
+    <tr><td class="name">Dangerous corners</td><td>11/180 drowsy→alert; membership churns between models</td><td>High</td></tr>
+    <tr><td class="name">Top responsible-AI risk</td><td>Confidence cannot gate warnings (inverted gap) → blocks autonomous warning behavior</td><td>High</td></tr>
+    <tr><td class="name">Cold-start dependence</td><td>Middle-class gain reverts to anchor level at 25% truncation</td><td>Medium-High (simulation)</td></tr>
+    <tr><td class="name">Missing evidence</td><td>Demographic slices; real mid-fatigue onsets; per-video KSS; calibration results</td><td>High (that it's missing)</td></tr>
+    <tr class="hi"><td class="name">Preliminary implication</td><td><b>Limit to decision support</b> — personal awareness aid with hedged middle band and stated warm-up caveat; no autonomous warnings; no multi-user or safety-adjacent claims</td><td>—</td></tr>
+  </table>
+
+  <p>Note the two-tier confidence in the first row. Confidence that the <em>protocol</em> is sound (no leakage, reproducible, causal) is high; confidence in the <em>effect size</em> is only medium, because a fold band of ±0.399 around 0.484 — with 22 of 60 single-subject folds scoring zero or below — is the honest face of n=60. Splitting those two kinds of confidence keeps the ledger from overselling a result whose direction is solid but whose magnitude is foggy.</p>
+
+  <p>And the punchline row: <em>limit to decision support</em>. Not "deploy" — the calibration inversion and the 11 silent misses forbid autonomous behavior. Not "do not use" — the champion beats every floor through a leakage-hardened protocol, and its failures are characterized, bounded, and explainable. The evidence supports a personal awareness aid that shows hedged output to one consenting user who knows about the warm-up. That's a smaller claim than the project dreamed of in week 4, and a much better-defended one.</p>
+
+  <div class="quizblock">
+    <h4>Check yourself · Section 6</h4>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q1.</span>Why is the session-baseline risk classified "revised" rather than "confirmed," when the underlying mechanism (drift silence at cold start) was verified?</div>
+      <button class="opt" data-correct="false" data-fb="The mechanism *was* verified — drift features do zero out. The classification hinges on where the consequence landed.">Because the probe failed to verify the mechanism.</button>
+      <button class="opt" data-correct="true" data-fb="Exactly. A8 predicted drowsy-blindness; the evidence showed drowsy detection survives (level features carry it) while the *middle class* pays the cost. The risk is real but its predicted consequence was wrong — that's a revision of the risk model, and saying so is the point of the vocabulary.">The mechanism held but the predicted victim was wrong — drowsy recall survived and the middle class absorbed the damage instead.</button>
+      <button class="opt" data-correct="false" data-fb="Simulation limits affect the confidence grade (Medium-High), not the classification between confirmed and revised.">Because simulated evidence can never confirm anything.</button>
+      <button class="opt" data-correct="false" data-fb="It was A8 that introduced this risk — it's absolutely in scope for the trace; the classification just isn't 'confirmed.'">Because the risk wasn't in the original A4 audit, so it can't be traced.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q2.</span>What makes this week's "still untested" verdict on cohort skew stronger than previous weeks' versions of the same admission?</div>
+      <button class="opt" data-correct="true" data-fb="Right — it names the concrete obstacle: the feature table contains no demographic columns by design, so no slice can be computed from existing artifacts, and creating one requires manual annotation of privacy-restricted local video. A specific 'why not' converts an excuse into evidence that properly caps the recommendation scope.">It identifies exactly why the test can't be run from current artifacts, turning a vague to-do into a scoping constraint.</button>
+      <button class="opt" data-correct="false" data-fb="No subgroup result was produced at all — that's the entire finding.">It reports preliminary subgroup numbers for the first time.</button>
+      <button class="opt" data-correct="false" data-fb="The cohort is still 51M/9F and skewed; nothing about the data changed.">It shows the cohort skew was smaller than the audit feared.</button>
+      <button class="opt" data-correct="false" data-fb="Untested risks still matter enormously — this one caps the entire deployment scope to a single user.">It demotes the risk to irrelevant since it can't be measured.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q3.</span>The ledger's first row splits confidence into "High (protocol)" and "Medium (effect size)." What distinction is that encoding?</div>
+      <button class="opt" data-correct="false" data-fb="Both grades describe the same run — the split is between two different things one can be confident about.">The training run versus the evaluation run.</button>
+      <button class="opt" data-correct="true" data-fb="Yes. We can be highly confident nothing is *cheating* (subject-disjoint folds, causal features, anchor reproduction) while being only moderately confident in the *magnitude* of the advantage, because ±0.399 around 0.484 with 22/60 folds at ≤0 is a wide, honest band at n=60. Conflating the two is how results get oversold.">Confidence that the measurement is honest versus confidence in how large the measured effect actually is.</button>
+      <button class="opt" data-correct="false" data-fb="Both concern the same champion model — no second model is involved in that row.">Confidence in the champion versus confidence in the GRU.</button>
+      <button class="opt" data-correct="false" data-fb="The ledger's grades are about evidence quality, not about who performs deployment steps.">Confidence in the developer versus the deployment engineer.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q4.</span>Which pair of findings most directly forces "limit to decision support" rather than "deploy"?</div>
+      <button class="opt" data-correct="true" data-fb="Exactly. Autonomous warnings need trustworthy confidence (inverted for the key class) and an acceptably low silent-miss rate (11/180 drowsy→alert says otherwise). Together they forbid the system acting on its own — while the floor-beating, leakage-hardened signal still justifies informing a human.">The inverted confidence gap on low-vigilant and the 11 drowsy-called-alert silent misses.</button>
+      <button class="opt" data-correct="false" data-fb="The luminance result went the *good* way (confound controlled) — it supports use rather than restricting it.">The luminance-confound result and the class balance of the dataset.</button>
+      <button class="opt" data-correct="false" data-fb="Those affect comparability bookkeeping, not the deployment decision — and both were resolved.">The sklearn version mismatch and the fold-loading protocol.</button>
+      <button class="opt" data-correct="false" data-fb="The GRU was rejected and isn't part of any deployment path; its failure doesn't constrain the champion's deployment.">The GRU's early stopping and its corner-error count.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q5.</span>Why does the trace of the luminance confound classify it as "weakened" — and why is that trace worth including when the news is good?</div>
+      <button class="opt" data-correct="false" data-fb="'Weakened' applies to the *risk*, not the model: the concern lost force because evidence accumulated against it.">Because the model's performance got weaker on bright videos.</button>
+      <button class="opt" data-correct="true" data-fb="Right. The risk itself lost force: luminance-only sits at chance, and this week's failure slices track eyelid dynamics rather than lighting. Including a resolved risk demonstrates the audit process closing a loop — predictions that get *retired* by evidence are proof the risk register is alive, not decoration.">The evidence accumulated against the risk — and showing a concern properly retired proves the audit process works end to end.</button>
+      <button class="opt" data-correct="false" data-fb="Good-news traces are explicitly valuable; the rubric asks whether concerns were confirmed *or weakened* — both directions are the assignment.">It shouldn't be included; traces are only for risks that materialized.</button>
+      <button class="opt" data-correct="false" data-fb="The luminance columns are still excluded from model input per the charter — that design decision stands regardless.">Because the luminance features can now safely join the model's inputs.</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ SECTION 7 ============================ -->
+<section id="s7">
+  <h2><span class="num">Section 7</span>The code: what changed in the repo and what you're turning in</h2>
+
+  <p>The code footprint this week is one new analysis module, one new test file, and a small refactor with a story behind it. Here's the full change set:</p>
+
+  <ul class="filelist">
+    <li><span class="fn">src/training/failure_analysis.py</span><span class="pill new">NEW</span>
+      <div class="fd">All four analyses plus the cold-start probe. Entry point <code class="inl">uv run failure_analysis</code>; <code class="inl">--skip-cold-start</code> runs only the artifact-slicing parts. Writes eight <code class="inl">a9_*</code> artifacts flat into <code class="inl">outputs/</code>, leaving every A7/A8 file untouched.</div></li>
+    <li><span class="fn">tests/test_failure_analysis.py</span><span class="pill new">NEW</span>
+      <div class="fd">Eight tests: truncation drops/renumbers correctly, fraction 0.0 is an identity, the cut point becomes a true session start (drift/delta/elapsed all zero), corner categories, miss-direction labeling, calibration math, cold-start recall summary, and the graded reproduction check.</div></li>
+    <li><span class="fn">src/training/sequence_models.py</span><span class="pill new">NEW</span>
+      <div class="fd">The GRU classifier and sequence padding — the only torch users formerly in <code class="inl">temporal.py</code> — moved here unchanged.</div></li>
+    <li><span class="fn">src/training/temporal.py</span><span class="pill edit">EDIT</span>
+      <div class="fd">Now torch-free: keeps the trend features, sequence building, and causality invariants that the champion path and the A9 analysis import.</div></li>
+    <li><span class="fn">src/training/artifacts.py</span><span class="pill edit">EDIT</span>
+      <div class="fd">Gains <code class="inl">aggregate_window_predictions</code>, <code class="inl">git_sha</code>, and <code class="inl">package_versions</code>, moved from <code class="inl">train.py</code> so torch-free callers can aggregate and write manifests.</div></li>
+    <li><span class="fn">src/training/train.py · train_temporal.py · pyproject.toml · tests/test_temporal.py · tests/test_sequence_models.py</span><span class="pill edit">EDIT</span>
+      <div class="fd">Import updates for the moves, the new <code class="inl">failure_analysis</code> script entry, and the relocated GRU tests. No behavior changes anywhere.</div></li>
+    <li><span class="fn">docs/Assignment 9 Notes.md</span><span class="pill doc">MEMO</span>
+      <div class="fd">The five-part failure analysis and responsible AI risk memo — the actual deliverable.</div></li>
+  </ul>
+
+  <h3>Why the refactor earns its diff</h3>
+
+  <p>A8's memo made a claim in passing: "the champion path remains sklearn-only; torch stays optional for rejected/diagnostic runs." This week that claim got audited by reality — the failure analysis needs the trend-feature code but has no business importing a neural-network library — and reality found it was only <em>morally</em> true. <code class="inl">temporal.py</code> imported torch at module level for two residents (the GRU and its padding helper), so anything touching trend features dragged the whole torch stack along. The fix is an import-boundary move, not a rewrite: the two torch users now live in <code class="inl">sequence_models.py</code>, which only the A8 experiment runner imports.</p>
+
+  <div class="diagram">
+    <div class="flow">
+      <div class="node" style="border-color:#cfe3d7; background:var(--accent-soft)"><div class="t">temporal.py</div><div class="s">trends · causality · torch-free</div></div>
+      <div class="arrowwrap"><div class="arrow">→</div><div class="lbl">imported by</div></div>
+      <div class="node" style="border-color:#cfe3d7; background:var(--accent-soft)"><div class="t">failure_analysis.py</div><div class="s">A9 · sklearn only</div></div>
+      <div class="arrow" style="color:var(--line)">·</div>
+      <div class="node" style="border-color:#cfe0f0; background:var(--blue-soft)"><div class="t">sequence_models.py</div><div class="s">GRU · padding · torch</div></div>
+      <div class="arrowwrap"><div class="arrow">→</div><div class="lbl">imported by</div></div>
+      <div class="node" style="border-color:#cfe0f0; background:var(--blue-soft)"><div class="t">train_temporal.py</div><div class="s">A8 reruns only</div></div>
+    </div>
+    <figcaption>The import boundary after the refactor. The green path — champion and analysis — runs on a machine with no torch installed; the blue path exists for reproducing the rejected A8 experiment.</figcaption>
+  </div>
+
+  <div class="callout key">
+    <span class="lab">Key idea · Dependency claims are architecture claims</span>
+    "This path only needs X" is only true if the import graph enforces it. Optional dependencies that are imported unconditionally are not optional — they're mandatory with good intentions. Moving the torch users behind their own module makes the memo's claim checkable by running <code class="inl">python -c "import training.failure_analysis"</code> on a torch-less machine.
+  </div>
+
+  <h3>Running it, and what goes in the zip</h3>
+
+<pre><span class="c"># the full analysis (loads saved folds + saved A8 predictions; ~3 min for 60 folds)</span>
+uv run failure_analysis
+
+<span class="c"># artifact-slicing analyses only (seconds; skips the cold-start refits)</span>
+uv run failure_analysis --skip-cold-start
+
+<span class="c"># the tests that pin the probe's correctness</span>
+uv run pytest tests/test_failure_analysis.py</pre>
+
+  <p>The submission zip mirrors previous weeks: the memo (<code class="inl">Assignment 9 Notes.md</code>) as the primary document, the eight <code class="inl">a9_*</code> artifacts plus <code class="inl">a9_manifest.json</code> as supporting evidence, the analysis module and its tests as the code, and a line in the memo's appendix telling the grader how to regenerate everything. No raw video, no frames, no per-subject identifiable data — the same privacy line every prior submission held.</p>
+
+  <p>A final thought before you submit. Assignment 8 ended by choosing a champion; Assignment 9 ends by knowing exactly how that champion lets people down — 39 borderline sessions read as their more-confident neighbors, eleven silent misses, a confidence signal that inverts on the class that matters, and an improvement that quietly assumes you opened the app before getting tired. None of that was visible in QWK 0.484. All of it is now written down, traced to predictions made weeks ago, and priced into a recommendation small enough to defend: a personal aid that informs rather than decides. Week 10 gets to argue the verdict — but it will argue from this table.</p>
+
+  <div class="quizblock">
+    <h4>Check yourself · Section 7</h4>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q1.</span>What was the actual problem the sequence_models refactor solved?</div>
+      <button class="opt" data-correct="false" data-fb="No behavior changed anywhere — the GRU code is byte-for-byte the same logic in a new home.">The GRU implementation had a bug that needed isolating.</button>
+      <button class="opt" data-correct="true" data-fb="Right. temporal.py imported torch at module level for two GRU-related residents, so the torch-free champion path and A9 analysis couldn't import trend features without the full torch stack. Moving those two behind their own module makes the 'sklearn-only champion path' claim structurally true.">A module-level torch import in temporal.py made the supposedly sklearn-only path depend on torch; the move enforces the claimed boundary.</button>
+      <button class="opt" data-correct="false" data-fb="Speed wasn't the issue (imports are cheap once installed) — installability and honesty of the dependency claim were.">temporal.py was too slow to import during training.</button>
+      <button class="opt" data-correct="false" data-fb="The A8 artifacts are untouched; train_temporal still runs identically with updated imports.">The A8 experiments needed to be re-run with a new GRU.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q2.</span>All A9 outputs use an <code class="inl">a9_</code> prefix and A7/A8 files are never overwritten. What working principle does this continue?</div>
+      <button class="opt" data-correct="true" data-fb="Exactly — the same flat-directory, prefix-per-assignment contract A8 used (temporal_*). Prior artifacts are immutable evidence; every assignment's comparisons stay checkable because the things being compared still exist, unmodified.">Prior assignments' artifacts are immutable evidence — new runs add files rather than overwrite, keeping every cross-assignment comparison verifiable.</button>
+      <button class="opt" data-correct="false" data-fb="Nothing is deleted or rotated — accumulation is deliberate here.">Old outputs are rotated out to save disk space.</button>
+      <button class="opt" data-correct="false" data-fb="The prefix isn't about grading automation; it's about not destroying the evidence base your own memo cites.">The grader's scripts require files to start with the assignment number.</button>
+      <button class="opt" data-correct="false" data-fb="They're plain CSVs like everything else — the difference is naming discipline, not format.">a9_ files use a different serialization format.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q3.</span>Which property of the truncation function is pinned by a dedicated unit test?</div>
+      <button class="opt" data-correct="false" data-fb="Runtime isn't tested — correctness of the simulated cold start is.">That it runs in under a second per fold.</button>
+      <button class="opt" data-correct="false" data-fb="The function never touches feature values — it removes rows and renumbers. And that's asserted indirectly, but it's not the key property.">That it rescales the remaining feature values.</button>
+      <button class="opt" data-correct="true" data-fb="Yes — after truncation plus trend recomputation, every drift and delta feature at the first kept window is exactly 0 and elapsed_min is 0. That's the property that makes the probe a valid cold-start simulation: the model has verifiably forgotten the deleted history.">That the cut point becomes a genuine session start: drift, delta, and elapsed time are all exactly zero at the first kept window.</button>
+      <button class="opt" data-correct="false" data-fb="Truncation applies per video within the test subject — fold membership is untouched.">That the truncated videos stay in their original folds.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q4.</span>Someone asks: "Your accuracy went from 0.556 to 0.483 under truncation — why do you keep saying drowsy detection is robust?" What's the correct response?</div>
+      <button class="opt" data-correct="false" data-fb="The accuracy drop is real; the point is *where* it comes from, which class-level recalls reveal.">The accuracy drop is a measurement artifact.</button>
+      <button class="opt" data-correct="true" data-fb="Right — aggregate accuracy pools three classes. Per-class recalls show drowsy flat (35→34→35) while alert and low-vigilant absorb the entire drop. 'The model got worse' and 'the model got worse at detecting drowsiness' are different claims, and only class-level evidence separates them.">The drop is real but lands on alert and low-vigilant; drowsy recall is flat across all truncations — aggregate accuracy can't show which class paid.</button>
+      <button class="opt" data-correct="false" data-fb="35/60 drowsy recall is the same before and after truncation — robust *to truncation*, which is the claim being made.">Drowsy recall also dropped, but less visibly.</button>
+      <button class="opt" data-correct="false" data-fb="The 25%-vs-50% wobble is noise; the class-level decomposition of the 0%→25% drop is not — it's consistent and mechanistically explained.">All differences under truncation are within noise.</button>
+      <div class="fb"></div>
+    </div>
+    <div class="quiz" data-quiz>
+      <div class="q"><span class="qn">Q5.</span>Looking across the whole assignment: what single sentence best captures what Assignment 9 added to the portfolio?</div>
+      <button class="opt" data-correct="false" data-fb="No model changed this week — the champion is the same trend_logistic A8 adopted.">It upgraded the champion model's accuracy on the middle class.</button>
+      <button class="opt" data-correct="false" data-fb="Sequence models were settled in A8; this week only *documented* that decision in the Part D card.">It proved sequence models can't work on this dataset.</button>
+      <button class="opt" data-correct="true" data-fb="Exactly. The aggregate scoreboard didn't move — instead the project now knows its failure patterns by name (direction, confidence, warm-up dependence, silent corners), knows which were predicted, and has priced them into a defensible scope: decision support for one informed user. That characterization, not a metric, is the deliverable.">It converted an aggregate score into a characterized failure profile — who the model fails, how confidently, under what conditions — and a recommendation scoped to that evidence.</button>
+      <button class="opt" data-correct="false" data-fb="Calibration work is *scheduled* (Week 10's CORN + temperature scaling), not done; this week established that it's blocking.">It fixed the calibration problem with temperature scaling.</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+</section>
+
+<div class="footnote">
+  Companion to <b>docs/Assignment 9 Notes.md</b> (the submitted memo) · Artifacts under <code class="inl">outputs/a9_*</code> · Reproduce with <code class="inl">uv run failure_analysis</code> · Dataset: Ghoddoosian, Galib &amp; Athitsos, CVPR Workshops 2019 (UTA-RLDD).
+</div>
+
+</div>
+<script>
+(function(){
+  var quizzes = document.querySelectorAll('.quiz');
+  var totalQuestions = quizzes.length;
+  var answered = {};
+  var correctCount = 0;
+
+  quizzes.forEach(function(quiz, qi){
+    var opts = quiz.querySelectorAll('.opt');
+    var fb = quiz.querySelector('.fb');
+    opts.forEach(function(opt){
+      opt.addEventListener('click', function(){
+        var isCorrect = opt.getAttribute('data-correct') === 'true';
+        var firstTime = !answered[qi];
+
+        opts.forEach(function(o){ o.classList.remove('wrong'); });
+
+        if(isCorrect){
+          opt.classList.add('correct');
+          if(!opt.querySelector('.mark')) opt.insertAdjacentHTML('beforeend','<span class="mark"></span>');
+          fb.className = 'fb ok show';
+          fb.innerHTML = '<b>Correct.</b> ' + (opt.getAttribute('data-fb')||'');
+          if(firstTime){ correctCount++; }
+        } else {
+          opt.classList.add('wrong');
+          if(!opt.querySelector('.mark')) opt.insertAdjacentHTML('beforeend','<span class="mark"></span>');
+          fb.className = 'fb no show';
+          fb.innerHTML = '<b>Not quite.</b> ' + (opt.getAttribute('data-fb')||'');
+          opts.forEach(function(o){
+            if(o.getAttribute('data-correct') === 'true'){ o.classList.add('reveal-correct'); }
+          });
+        }
+        answered[qi] = true;
+        updateScore();
+      });
+    });
+  });
+
+  var scoreEl = document.createElement('div');
+  scoreEl.style.cssText = 'position:fixed;top:10px;right:14px;z-index:60;font-family:ui-sans-serif,system-ui,sans-serif;font-size:12px;font-weight:700;background:#fff;border:1px solid #e4e7ec;border-radius:20px;padding:5px 12px;box-shadow:0 1px 4px rgba(0,0,0,.08);color:#2f6f4f';
+  document.body.appendChild(scoreEl);
+  function updateScore(){
+    var done = Object.keys(answered).length;
+    scoreEl.textContent = 'Score ' + correctCount + '/' + done + '  ·  ' + done + '/' + totalQuestions + ' answered';
+  }
+  updateScore();
+
+  var pbar = document.getElementById('pbar');
+  function onScroll(){
+    var h = document.documentElement;
+    var scrolled = h.scrollTop / (h.scrollHeight - h.clientHeight);
+    pbar.style.width = (scrolled * 100) + '%';
+  }
+  document.addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+
+  // Truncation strip: 80 windows, first 20 cut, fatigue rising late in session
+  var strip = document.getElementById('trunc-strip');
+  if(strip){
+    for(var i=0;i<80;i++){
+      var d = document.createElement('div');
+      var v = 8 + 40*Math.exp(-Math.pow((i-62)/18,2)) + 22*Math.exp(-Math.pow((i-75)/6,2)) + 6*Math.sin(i*1.7)*Math.sin(i*0.31);
+      var cls = 'w';
+      if(i < 20) cls += ' cut';
+      else if(v > 45) cls += ' hot';
+      else if(v > 28) cls += ' warm';
+      d.className = cls;
+      d.style.height = Math.max(4, v) + 'px';
+      strip.appendChild(d);
+    }
+  }
+})();
+</script>
+</body>
+</html>

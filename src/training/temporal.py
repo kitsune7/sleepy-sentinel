@@ -12,6 +12,11 @@ discards? This file owns the two representations that test that question:
 - sequences: per-video `(T, F)` arrays of window features, consumed by a small
   many-to-one GRU that reads the whole video before predicting.
 
+This module stays torch-free so the champion path (trend features + logistic
+regression) and the Assignment 9 failure analysis can run without torch
+installed. The GRU itself and its padding helper live in
+`training.sequence_models`.
+
 Causality invariant: every trend feature for window `t` must be computable
 from windows `0..t` only. A live early-fatigue aid never sees the future, so
 features that peek ahead would inflate the offline comparison. Tests assert
@@ -25,7 +30,6 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import torch
 
 from training.baselines import NON_MODEL_INPUT_COLUMNS
 
@@ -109,39 +113,6 @@ def build_video_sequences(
             }
         )
     return pd.DataFrame(rows)
-
-
-def pad_sequences(sequences: list[np.ndarray]) -> tuple[torch.Tensor, torch.Tensor]:
-    """Stack variable-length `(T, F)` arrays into a zero-padded batch.
-
-    Returns `(padded, lengths)` where `padded` has shape
-    `(batch, max_T, F)` and `lengths` holds each sequence's true length so the
-    GRU can ignore the padding via packing.
-    """
-    lengths = torch.tensor([len(seq) for seq in sequences], dtype=torch.long)
-    max_len = int(lengths.max())
-    feature_dim = sequences[0].shape[1]
-    padded = torch.zeros((len(sequences), max_len, feature_dim), dtype=torch.float32)
-    for idx, seq in enumerate(sequences):
-        padded[idx, : len(seq)] = torch.from_numpy(np.ascontiguousarray(seq))
-    return padded, lengths
-
-
-class GruVideoClassifier(torch.nn.Module):
-    """Small many-to-one GRU: read a video's window sequence, predict its label."""
-
-    def __init__(self, input_dim: int, hidden_dim: int = 32, dropout: float = 0.25, num_classes: int = 3):
-        super().__init__()
-        self.gru = torch.nn.GRU(input_dim, hidden_dim, batch_first=True)
-        self.dropout = torch.nn.Dropout(dropout)
-        self.head = torch.nn.Linear(hidden_dim, num_classes)
-
-    def forward(self, padded: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
-        packed = torch.nn.utils.rnn.pack_padded_sequence(
-            padded, lengths.cpu(), batch_first=True, enforce_sorted=False
-        )
-        _, final_hidden = self.gru(packed)
-        return self.head(self.dropout(final_hidden[-1]))
 
 
 def _trailing_slopes(series: pd.Series) -> pd.Series:
